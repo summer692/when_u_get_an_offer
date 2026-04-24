@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-white text-ink-900 font-text antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  .dark body {
+    @apply bg-black text-ink-100;
+  }
+
+  /* Tabular digits for countdowns */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* Reduce motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           rounded-full bg-accent px-6 py-3 text-white
+           font-medium transition-all duration-200 ease-apple
+           hover:bg-accent-hover active:scale-[0.98]
+           focus:outline-none focus:ring-2 focus:ring-accent/40;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-full
+           px-5 py-2.5 text-ink-700 dark:text-ink-300
+           transition-colors duration-200 ease-apple
+           hover:bg-ink-100 dark:hover:bg-ink-900;
+  }
+
+  .card {
+    @apply rounded-card bg-white dark:bg-ink-900
+           border border-ink-100 dark:border-ink-700
+           shadow-card dark:shadow-card-dark
+           transition-all duration-300 ease-apple;
+  }
+
+  .card-hover {
+    @apply hover:-translate-y-0.5 hover:shadow-lg;
+  }
+
+  .section-label {
+    @apply text-xs uppercase tracking-[0.18em] text-ink-500 font-medium;
+  }
+
+  .fade-up {
+    animation: fadeUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 16px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+}
