@@ -16,6 +16,11 @@ export default {
           300: "#D2D2D7",
           100: "#F5F5F7",
         },
+        paper: {
+          DEFAULT: "#F5F1EA",
+          dark: "#1A1814",
+          warm: "#EFE9DD",
+        },
       },
       fontFamily: {
         display: [
