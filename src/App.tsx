@@ -27,18 +27,18 @@ export default function App() {
     const s = await getSettings();
     if (!s.apiKey) {
       setSettingsOpen(true);
-      throw new Error("请先在设置中填入 OpenRouter API Key");
+      throw new Error("请先在设置中填入 API Key");
     }
-    return { apiKey: s.apiKey, model: s.model };
+    return { apiKey: s.apiKey, provider: s.provider, model: s.model };
   }, []);
 
   const runExtraction = useCallback(
     async (input: ParsedInput) => {
       try {
         setError(null);
-        const { apiKey, model } = await ensureKey();
+        const { apiKey, provider, model } = await ensureKey();
         setStage("正在读取 offer…");
-        const extracted = await extractOffer(input, { apiKey, model });
+        const extracted = await extractOffer(input, { apiKey, provider, model });
         setStage("保存中…");
         const now = Date.now();
         const offer: Offer = {

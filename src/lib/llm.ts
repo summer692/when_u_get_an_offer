@@ -1,9 +1,64 @@
-import type { ExtractedOffer } from "./schema";
+import type { ExtractedOffer, Provider } from "./schema";
 import type { ParsedInput } from "./parsers";
 
-const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+interface ProviderConfig {
+  endpoint: string;
+  defaultModel: string;
+  /** Optional extra headers (e.g. OpenRouter analytics) */
+  extraHeaders?: () => Record<string, string>;
+  models: { id: string; label: string; note?: string }[];
+}
 
-export const DEFAULT_MODEL = "google/gemini-2.5-flash";
+export const PROVIDERS: Record<Provider, ProviderConfig> = {
+  google: {
+    endpoint:
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    defaultModel: "gemini-2.5-flash-lite",
+    models: [
+      {
+        id: "gemini-2.5-flash-lite",
+        label: "Gemini 2.5 Flash-Lite",
+        note: "免费层 / 最便宜",
+      },
+      {
+        id: "gemini-2.5-flash",
+        label: "Gemini 2.5 Flash",
+        note: "更高质量",
+      },
+      {
+        id: "gemini-2.5-pro",
+        label: "Gemini 2.5 Pro",
+        note: "高难度 offer",
+      },
+    ],
+  },
+  openrouter: {
+    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    defaultModel: "google/gemini-2.5-flash-lite",
+    extraHeaders: () => ({
+      "HTTP-Referer": window.location.origin,
+      "X-Title": "OfferLens",
+    }),
+    models: [
+      { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite" },
+      { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+      {
+        id: "anthropic/claude-haiku-4.5",
+        label: "Claude Haiku 4.5",
+        note: "结构化抽取最稳",
+      },
+      {
+        id: "anthropic/claude-sonnet-4.6",
+        label: "Claude Sonnet 4.6",
+        note: "高质量、贵",
+      },
+      { id: "openai/gpt-4o-mini", label: "GPT-4o mini" },
+    ],
+  },
+};
+
+export const DEFAULT_PROVIDER: Provider = "google";
+export const DEFAULT_MODEL = PROVIDERS.google.defaultModel;
 
 const SYSTEM_PROMPT = `你是 OfferLens 的信息抽取引擎。用户会给你一份学校录取通知（offer）的原文或图片。
 请**仅**输出一个 JSON 对象，遵循下方 schema，不要输出任何其它文字、注释或 markdown 包裹。
@@ -45,6 +100,7 @@ Schema:
 
 export interface ExtractOptions {
   apiKey: string;
+  provider?: Provider;
   model?: string;
   signal?: AbortSignal;
 }
@@ -53,7 +109,9 @@ export async function extractOffer(
   input: ParsedInput,
   opts: ExtractOptions
 ): Promise<ExtractedOffer> {
-  const model = opts.model || DEFAULT_MODEL;
+  const provider = opts.provider ?? DEFAULT_PROVIDER;
+  const config = PROVIDERS[provider];
+  const model = opts.model || config.defaultModel;
 
   const userContent: Array<
     { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
@@ -74,15 +132,16 @@ export async function extractOffer(
     userContent.push({ type: "text", text: "(empty)" });
   }
 
-  const res = await fetch(ENDPOINT, {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${opts.apiKey}`,
+    ...(config.extraHeaders?.() ?? {}),
+  };
+
+  const res = await fetch(config.endpoint, {
     method: "POST",
     signal: opts.signal,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${opts.apiKey}`,
-      "HTTP-Referer": window.location.origin,
-      "X-Title": "OfferLens",
-    },
+    headers,
     body: JSON.stringify({
       model,
       response_format: { type: "json_object" },
@@ -113,10 +172,8 @@ function safeJsonParse(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
-    // Some models wrap JSON in ```json ... ``` despite instructions.
     const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (match) return JSON.parse(match[1]);
-    // Grab first {...}
     const first = text.indexOf("{");
     const last = text.lastIndexOf("}");
     if (first >= 0 && last > first) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getSettings, setSetting } from "../lib/db";
-import { DEFAULT_MODEL } from "../lib/llm";
+import { DEFAULT_PROVIDER, PROVIDERS } from "../lib/llm";
+import type { Provider } from "../lib/schema";
 import { useTheme, type ThemeMode } from "../hooks/useTheme";
 
 interface Props {
@@ -8,26 +9,58 @@ interface Props {
   onClose: () => void;
 }
 
+const PROVIDER_META: Record<
+  Provider,
+  { label: string; keyHint: string; keyUrl: string; placeholder: string }
+> = {
+  google: {
+    label: "Google AI Studio",
+    keyHint: "免费层每天可用 1500 次 · 仅存储在你的浏览器中",
+    keyUrl: "https://aistudio.google.com/apikey",
+    placeholder: "AIza...",
+  },
+  openrouter: {
+    label: "OpenRouter",
+    keyHint: "一把 key 通多个模型 · 仅存储在你的浏览器中",
+    keyUrl: "https://openrouter.ai/keys",
+    placeholder: "sk-or-...",
+  },
+};
+
 export function SettingsSheet({ open, onClose }: Props) {
+  const [provider, setProvider] = useState<Provider>(DEFAULT_PROVIDER);
   const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState(DEFAULT_MODEL);
+  const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER].defaultModel);
   const { mode, setMode } = useTheme();
 
   useEffect(() => {
     if (!open) return;
     getSettings().then((s) => {
+      const p = s.provider ?? DEFAULT_PROVIDER;
+      setProvider(p);
       setApiKey(s.apiKey ?? "");
-      setModel(s.model ?? DEFAULT_MODEL);
+      setModel(s.model ?? PROVIDERS[p].defaultModel);
     });
   }, [open]);
 
+  function changeProvider(p: Provider) {
+    setProvider(p);
+    if (!PROVIDERS[p].models.find((m) => m.id === model)) {
+      setModel(PROVIDERS[p].defaultModel);
+    }
+  }
+
   async function save() {
+    await setSetting("provider", provider);
     await setSetting("apiKey", apiKey.trim() || undefined);
-    await setSetting("model", model.trim() || DEFAULT_MODEL);
+    await setSetting("model", model.trim() || PROVIDERS[provider].defaultModel);
     onClose();
   }
 
   if (!open) return null;
+
+  const meta = PROVIDER_META[provider];
+  const config = PROVIDERS[provider];
 
   return (
     <div
@@ -35,7 +68,7 @@ export function SettingsSheet({ open, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="w-full md:max-w-lg bg-white dark:bg-ink-900 rounded-t-3xl md:rounded-card p-8 md:p-10 fade-up"
+        className="w-full md:max-w-lg bg-white dark:bg-ink-900 rounded-t-3xl md:rounded-card p-8 md:p-10 fade-up max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-8">
@@ -50,43 +83,54 @@ export function SettingsSheet({ open, onClose }: Props) {
         </div>
 
         <div className="space-y-8">
-          <Field label="OpenRouter API Key" hint="仅存储在你的浏览器中">
+          <Field label="服务商">
+            <div className="flex gap-1 p-1 rounded-full bg-ink-100 dark:bg-black w-fit">
+              {(Object.keys(PROVIDERS) as Provider[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => changeProvider(p)}
+                  className={`px-5 py-2 rounded-full text-sm transition-all ${
+                    provider === p
+                      ? "bg-white dark:bg-ink-700 shadow-sm"
+                      : "text-ink-500"
+                  }`}
+                >
+                  {PROVIDER_META[p].label}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <Field label={`${meta.label} API Key`} hint={meta.keyHint}>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-or-..."
+              placeholder={meta.placeholder}
               className="w-full px-4 py-3 rounded-xl bg-ink-100 dark:bg-black border border-transparent focus:border-accent focus:outline-none transition-colors"
             />
             <a
-              href="https://openrouter.ai/keys"
+              href={meta.keyUrl}
               target="_blank"
               rel="noreferrer"
               className="text-xs text-accent hover:underline mt-2 inline-block"
             >
-              前往 openrouter.ai 获取 key →
+              获取 {meta.label} key →
             </a>
           </Field>
 
-          <Field label="模型" hint="默认 Gemini 2.5 Flash（免费层）">
+          <Field label="模型">
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
               className="w-full px-4 py-3 rounded-xl bg-ink-100 dark:bg-black border border-transparent focus:border-accent focus:outline-none transition-colors"
             >
-              <option value="google/gemini-2.5-flash">
-                Google · Gemini 2.5 Flash（免费层）
-              </option>
-              <option value="google/gemini-2.5-flash-lite">
-                Google · Gemini 2.5 Flash-Lite
-              </option>
-              <option value="anthropic/claude-haiku-4.5">
-                Anthropic · Claude Haiku 4.5
-              </option>
-              <option value="anthropic/claude-sonnet-4.5">
-                Anthropic · Claude Sonnet 4.5
-              </option>
-              <option value="openai/gpt-4o-mini">OpenAI · GPT-4o mini</option>
+              {config.models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                  {m.note ? ` · ${m.note}` : ""}
+                </option>
+              ))}
             </select>
           </Field>
 

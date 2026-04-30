@@ -59,7 +59,10 @@ export interface Offer extends ExtractedOffer {
   source_name?: string;
 }
 
+export type Provider = "google" | "openrouter";
+
 export interface Settings {
+  provider?: Provider;
   apiKey?: string;
   model?: string;
   theme?: "system" | "light" | "dark";
