@@ -1,6 +1,10 @@
-import type { Offer } from "../lib/schema";
+import { useEffect, useRef, useState } from "react";
+import type { Offer, Settings } from "../lib/schema";
 import { daysUntil, formatDaysLeft } from "../lib/countdown";
 import { formatDate, formatMoney } from "../lib/format";
+import { getSettings } from "../lib/db";
+import { exportNodeToImage, safeFilename } from "../lib/exportImage";
+import { ShareCard } from "./ShareCard";
 
 interface Props {
   offer: Offer;
@@ -9,11 +13,49 @@ interface Props {
 }
 
 export function OfferDetail({ offer, onBack, onDelete }: Props) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [agency, setAgency] = useState<
+    Pick<Settings, "agencyName" | "agencyLogo">
+  >({});
+  const [exporting, setExporting] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    getSettings().then((s) =>
+      setAgency({ agencyName: s.agencyName, agencyLogo: s.agencyLogo }),
+    );
+  }, []);
+
+  async function handleExport() {
+    if (!cardRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const filename = `${safeFilename(offer.school)}-offer.png`;
+      const result = await exportNodeToImage(cardRef.current, filename);
+      setToast(result.mode === "shared" ? "已分享" : "已保存图片");
+    } catch (err) {
+      console.error(err);
+      setToast("导出失败，请重试");
+    } finally {
+      setExporting(false);
+      setTimeout(() => setToast(null), 2400);
+    }
+  }
+
   return (
     <div className="fade-up max-w-4xl mx-auto px-6 py-12">
-      <button onClick={onBack} className="btn-ghost mb-10 -ml-3">
-        ← 返回
-      </button>
+      <div className="flex items-center justify-between mb-10">
+        <button onClick={onBack} className="btn-ghost -ml-3">
+          ← 返回
+        </button>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="btn-primary disabled:opacity-60"
+        >
+          {exporting ? "生成中…" : "导出分享图"}
+        </button>
+      </div>
 
       <header className="mb-16">
         <div className="section-label">{offer.country || "—"}</div>
@@ -149,6 +191,31 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
           删除这个 offer
         </button>
       </div>
+
+      {/* Offscreen poster used for image export */}
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          top: 0,
+          left: -10000,
+          pointerEvents: "none",
+          zIndex: -1,
+        }}
+      >
+        <ShareCard
+          ref={cardRef}
+          offer={offer}
+          agencyName={agency.agencyName}
+          agencyLogo={agency.agencyLogo}
+        />
+      </div>
+
+      {toast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-ink-900 dark:bg-white text-white dark:text-ink-900 px-5 py-3 rounded-full text-sm shadow-lg fade-up z-50">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

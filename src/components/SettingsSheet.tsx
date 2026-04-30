@@ -31,6 +31,9 @@ export function SettingsSheet({ open, onClose }: Props) {
   const [provider, setProvider] = useState<Provider>(DEFAULT_PROVIDER);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER].defaultModel);
+  const [agencyName, setAgencyName] = useState("");
+  const [agencyLogo, setAgencyLogo] = useState<string | undefined>(undefined);
+  const [logoError, setLogoError] = useState<string | null>(null);
   const { mode, setMode } = useTheme();
 
   useEffect(() => {
@@ -40,8 +43,27 @@ export function SettingsSheet({ open, onClose }: Props) {
       setProvider(p);
       setApiKey(s.apiKey ?? "");
       setModel(s.model ?? PROVIDERS[p].defaultModel);
+      setAgencyName(s.agencyName ?? "");
+      setAgencyLogo(s.agencyLogo);
+      setLogoError(null);
     });
   }, [open]);
+
+  async function onLogoFile(file: File | undefined) {
+    setLogoError(null);
+    if (!file) return;
+    if (file.size > 256 * 1024) {
+      setLogoError("logo 太大了，请选 256 KB 以内的图片");
+      return;
+    }
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+    setAgencyLogo(dataUrl);
+  }
 
   function changeProvider(p: Provider) {
     setProvider(p);
@@ -54,6 +76,8 @@ export function SettingsSheet({ open, onClose }: Props) {
     await setSetting("provider", provider);
     await setSetting("apiKey", apiKey.trim() || undefined);
     await setSetting("model", model.trim() || PROVIDERS[provider].defaultModel);
+    await setSetting("agencyName", agencyName.trim() || undefined);
+    await setSetting("agencyLogo", agencyLogo || undefined);
     onClose();
   }
 
@@ -132,6 +156,50 @@ export function SettingsSheet({ open, onClose }: Props) {
                 </option>
               ))}
             </select>
+          </Field>
+
+          <Field
+            label="分享图品牌"
+            hint="设置后，导出的 offer 分享图右上角会带上你的公司名 / logo，页脚也会标注「由 XX 整理」"
+          >
+            <input
+              type="text"
+              value={agencyName}
+              onChange={(e) => setAgencyName(e.target.value)}
+              placeholder="例如：星辰留学"
+              className="w-full px-4 py-3 rounded-xl bg-ink-100 dark:bg-black border border-transparent focus:border-accent focus:outline-none transition-colors"
+            />
+            <div className="flex items-center gap-3 mt-3">
+              {agencyLogo && (
+                <div className="w-12 h-12 rounded-lg bg-white dark:bg-ink-700 border border-ink-100 dark:border-ink-700 flex items-center justify-center overflow-hidden">
+                  <img
+                    src={agencyLogo}
+                    alt="logo"
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+              )}
+              <label className="btn-ghost text-sm cursor-pointer">
+                {agencyLogo ? "更换 logo" : "上传 logo"}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  className="hidden"
+                  onChange={(e) => onLogoFile(e.target.files?.[0])}
+                />
+              </label>
+              {agencyLogo && (
+                <button
+                  onClick={() => setAgencyLogo(undefined)}
+                  className="text-xs text-ink-500 hover:text-red-500 transition-colors"
+                >
+                  移除
+                </button>
+              )}
+            </div>
+            {logoError && (
+              <div className="text-xs text-red-500 mt-2">{logoError}</div>
+            )}
           </Field>
 
           <Field label="外观">

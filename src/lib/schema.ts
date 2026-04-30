@@ -66,4 +66,6 @@ export interface Settings {
   apiKey?: string;
   model?: string;
   theme?: "system" | "light" | "dark";
+  agencyName?: string;
+  agencyLogo?: string;
 }

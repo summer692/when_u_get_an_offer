@@ -46,12 +46,23 @@ export async function deleteOffer(id: string): Promise<void> {
   await db.delete(STORE_OFFERS, id);
 }
 
+const SETTING_KEYS: (keyof Settings)[] = [
+  "provider",
+  "apiKey",
+  "model",
+  "theme",
+  "agencyName",
+  "agencyLogo",
+];
+
 export async function getSettings(): Promise<Settings> {
   const db = await getDB();
-  const apiKey = await db.get(STORE_SETTINGS, "apiKey");
-  const model = await db.get(STORE_SETTINGS, "model");
-  const theme = await db.get(STORE_SETTINGS, "theme");
-  return { apiKey, model, theme };
+  const out: Settings = {};
+  for (const key of SETTING_KEYS) {
+    const v = await db.get(STORE_SETTINGS, key);
+    if (v !== undefined) (out as Record<string, unknown>)[key] = v;
+  }
+  return out;
 }
 
 export async function setSetting<K extends keyof Settings>(
