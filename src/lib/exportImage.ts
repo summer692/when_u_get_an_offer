@@ -14,20 +14,28 @@ export async function exportNodeToImage(
     backgroundColor: "#F5F1EA",
   });
 
-  const blob = await (await fetch(dataUrl)).blob();
-  const file = new File([blob], filename, { type: "image/png" });
+  // Use Web Share API only on touch devices where the share sheet is the
+  // expected affordance. On desktop (mouse/trackpad) the share sheet has no
+  // "save to file" option, so always trigger a real download.
+  const isTouch =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(pointer: coarse)").matches;
 
-  if (
-    typeof navigator !== "undefined" &&
-    typeof navigator.canShare === "function" &&
-    navigator.canShare({ files: [file] })
-  ) {
-    try {
-      await navigator.share({ files: [file], title: filename });
-      return { mode: "shared" };
-    } catch (err) {
-      if ((err as DOMException)?.name === "AbortError") {
+  if (isTouch) {
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], filename, { type: "image/png" });
+    if (
+      typeof navigator !== "undefined" &&
+      typeof navigator.canShare === "function" &&
+      navigator.canShare({ files: [file] })
+    ) {
+      try {
+        await navigator.share({ files: [file], title: filename });
         return { mode: "shared" };
+      } catch (err) {
+        if ((err as DOMException)?.name === "AbortError") {
+          return { mode: "shared" };
+        }
       }
     }
   }

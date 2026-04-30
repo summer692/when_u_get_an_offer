@@ -30,6 +30,12 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
     if (!cardRef.current || exporting) return;
     setExporting(true);
     try {
+      // Re-read settings so that brand changes apply without a refresh.
+      const fresh = await getSettings();
+      setAgency({ agencyName: fresh.agencyName, agencyLogo: fresh.agencyLogo });
+      // Wait for React to commit the updated brand into the offscreen card.
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+
       const filename = `${safeFilename(offer.school)}-offer.png`;
       const result = await exportNodeToImage(cardRef.current, filename);
       setToast(result.mode === "shared" ? "已分享" : "已保存图片");
