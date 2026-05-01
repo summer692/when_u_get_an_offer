@@ -148,7 +148,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
 
       <header className="mb-12">
         <div className="text-2xl md:text-3xl font-display font-semibold tracking-tight">
-          🎉 恭喜你获得录取！
+          🎉 {offer.applicant_name ? `${offer.applicant_name}，` : ""}恭喜你获得录取！
         </div>
         <p className="mt-2 text-ink-500">以下是录取的详细信息。</p>
 

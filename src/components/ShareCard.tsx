@@ -95,7 +95,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
             lineHeight: 1.2,
           }}
         >
-          🎉 恭喜你获得录取！
+          🎉 {offer.applicant_name ? `${offer.applicant_name}，` : ""}恭喜你获得录取！
         </div>
         <div style={{ marginTop: 8, fontSize: 15, color: "#86868B" }}>
           以下是录取的详细信息。

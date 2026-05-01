@@ -69,6 +69,10 @@ export interface ExtractedOffer {
   /** Programme duration as written on the offer, e.g. "1.5 年", "2 years",
    * "30 credits". Optional but the LLM is instructed to always try. */
   duration?: string;
+  /** Recipient's name as it appears on the offer ("Dear X" / "Applicant
+   * Name: X" / "亲爱的 X"). Chinese form preferred when both are given.
+   * Used to personalize the greeting line. */
+  applicant_name?: string;
   /** Human-readable Chinese description of when the programme starts, e.g.
    * "2026/27 学年第一学期" or "2026 年 9 月". Set even when no exact ISO date
    * is available — many offers only specify the academic year + semester. */

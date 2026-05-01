@@ -75,6 +75,7 @@ Schema:
   "country_zh": string | null,              // 国家或地区中文名，如 "中国香港" / "英国" / "美国"
   "language": string | null,                // offer 原文语言（如 "en", "zh", "fr"）
   "duration": string | null,                // 项目时长，如 "1 年" / "1.5 年" / "2 年" / "30 学分"
+  "applicant_name": string | null,          // 录取人姓名（"Dear X" / "Applicant Name: X" / "亲爱的 X"），中文优先
   "term_start_text": string | null,         // 入学时间的中文描述（即使无具体日期，也要写学期+学年）
   "key_dates": [
     {
@@ -116,6 +117,19 @@ Schema:
   - degree_zh: Master/MSc/MA → "硕士"；Bachelor/BSc/BA → "学士"；PhD/Doctor of Philosophy → "博士"；Master of Engineering → "工程硕士"。
   - country_zh: Hong Kong → "中国香港"；United Kingdom/UK → "英国"；United States/US → "美国"；Australia → "澳大利亚"；Singapore → "新加坡"；Mainland China → "中国大陆"。
 - **英文规范化**：如果 offer 把学校或专业名写成全大写（如 "THE HONG KONG POLYTECHNIC UNIVERSITY" / "MSC SUSTAINABLE ENERGY"），抽取到 school / program 字段时**必须规范化为 Title Case**："The Hong Kong Polytechnic University" / "MSc Sustainable Energy"。常见缩写保持原样大写：MSc, MA, MBA, PhD, BSc, BA, MEng, MFA, LLM, MPhil, USA, UK, HK, MIT, NUS。
+
+申请人姓名 (applicant_name)：
+- 从 offer 上抽取被录取学生的姓名。常见位置：
+  - 信件抬头 "Dear [Name]," / "Dear Mr./Ms. [Name],"
+  - "Applicant Name: [Name]"
+  - 中文：抬头 "亲爱的 [姓名]" / "[姓名] 同学" / 申请人姓名栏
+  - 香港 / 台湾常见格式 "Applicant Name: Li Jun (李俊)"
+- **优先级**：完整中文姓名 > 中文名字（即使是同一人英文名后括号里的中文）> 英文姓名。
+- 多语形式如 "Li Jun (李俊)" → 取 "李俊"（不带括号、不带英文部分）。
+- 全大写英文名（"LI JUN"）→ 规范化为 Title Case "Li Jun"。
+- **去掉敬称**（Mr. / Ms. / Mrs. / Dr. / Prof. / 先生 / 女士 / 同学），只保留姓名本身。
+- 如果 offer 仅写 "Dear Student" / "Dear Applicant" 这种泛称，applicant_name 设为 null。
+- 找不到就 null，**不要编造**。
 
 conditions vs must_do（必须区分清楚，不要同一件事写在两处）：
 - **conditions = 学术 / 资格类录取条件**，描述"你必须满足或具备的状态 / 文件 / 资格"。例如：
@@ -289,6 +303,7 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     country_zh: r?.country_zh ?? undefined,
     language: r?.language ?? undefined,
     duration: r?.duration ?? undefined,
+    applicant_name: r?.applicant_name ?? undefined,
     term_start_text: r?.term_start_text ?? undefined,
     key_dates: Array.isArray(r?.key_dates) ? r!.key_dates : [],
     fees: r?.fees ?? undefined,
