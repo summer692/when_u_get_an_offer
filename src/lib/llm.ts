@@ -65,10 +65,14 @@ const SYSTEM_PROMPT = `你是 OfferLens 的信息抽取引擎。用户会给你�
 
 Schema:
 {
-  "school": string,                         // 学校全名
-  "program": string,                        // 项目 / 专业名
+  "school": string,                         // 学校全名（offer 上的原文，可能是英文）
+  "school_zh": string | null,               // 学校常用中文名，如 "香港理工大学"。没有公认中文名就 null
+  "program": string,                        // 项目 / 专业名（offer 原文）
+  "program_zh": string | null,              // 项目中文名，如 "可持续能源理学硕士"
   "degree": string | null,                  // 例如 "Master", "Bachelor", "PhD"
+  "degree_zh": string | null,               // 学位中文名："硕士" / "学士" / "博士"
   "country": string | null,                 // ISO 国家名或常用中/英名
+  "country_zh": string | null,              // 国家或地区中文名，如 "中国香港" / "英国" / "美国"
   "language": string | null,                // offer 原文语言（如 "en", "zh", "fr"）
   "duration": string | null,                // 项目时长，如 "1 年" / "1.5 年" / "2 年" / "30 学分"
   "key_dates": [
@@ -96,7 +100,12 @@ Schema:
 抽取规则：
 - 字段不确定就用 null 或空数组，**绝对不要编造**。
 - 学制时长 (duration) 必须尝试抽取：找 "Programme Duration" / "Normal Duration" / "学制" / "修业年限" / "总学分" 等字段。"Full-time 1.5 years" → "1.5 年"。
-- 一切 label 用中文，简洁。
+- 一切 label、key_dates[].label、must_do[].action、conditions[].item、tuition.note 等**用户可见**的文字一律用**中文**写，简洁直接（即使 offer 是全英文）。
+- 中文名规则：
+  - school_zh 是学校的常用中文名，例如 "The Hong Kong Polytechnic University" → "香港理工大学"；"University College London" → "伦敦大学学院"；"University of California, Berkeley" → "加州大学伯克利分校"；"The University of Hong Kong" → "香港大学"；"Imperial College London" → "帝国理工学院"。学校没有公认中文名就 null，不要硬翻。
+  - program_zh 是项目的中文译名（学校官方公布的优先；没有就用通用直译），例如 "MSc Sustainable Energy" → "可持续能源理学硕士"；"MSc Computer Science" → "计算机科学理学硕士"；"MBA" → "工商管理硕士"。
+  - degree_zh: Master/MSc/MA → "硕士"；Bachelor/BSc/BA → "学士"；PhD/Doctor of Philosophy → "博士"；Master of Engineering → "工程硕士"。
+  - country_zh: Hong Kong → "中国香港"；United Kingdom/UK → "英国"；United States/US → "美国"；Australia → "澳大利亚"；Singapore → "新加坡"；Mainland China → "中国大陆"。
 
 学费 vs 留位费（重要，常见错误源）：
 - "Caution Money" / "留位费" / "Acceptance Deposit" / "Enrolment Deposit" / "Seat Deposit" 不能塞进 tuition。
@@ -234,9 +243,13 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
   const r = raw as Partial<ExtractedOffer> | null | undefined;
   const out: ExtractedOffer = {
     school: r?.school ?? "Unknown school",
+    school_zh: r?.school_zh ?? undefined,
     program: r?.program ?? "",
+    program_zh: r?.program_zh ?? undefined,
     degree: r?.degree ?? undefined,
+    degree_zh: r?.degree_zh ?? undefined,
     country: r?.country ?? undefined,
+    country_zh: r?.country_zh ?? undefined,
     language: r?.language ?? undefined,
     duration: r?.duration ?? undefined,
     key_dates: Array.isArray(r?.key_dates) ? r!.key_dates : [],

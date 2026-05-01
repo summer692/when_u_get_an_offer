@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Money, Offer, Settings } from "../lib/schema";
+import type { Money, MustDo, Offer, Settings } from "../lib/schema";
 import { daysUntil, formatDaysLeft } from "../lib/countdown";
 import { formatDate, formatMoney } from "../lib/format";
 import { getSettings } from "../lib/db";
@@ -29,6 +29,13 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   const [durationDraft, setDurationDraft] = useState(offer.duration ?? "");
   const [researching, setResearching] = useState(false);
 
+  const schoolZh = offer.school_zh || offer.school;
+  const programZh = offer.program_zh;
+  const degreeZh = offer.degree_zh || offer.degree;
+  const countryZh = offer.country_zh || offer.country;
+  const termStart = offer.key_dates?.find((k) => k.type === "term_start")?.date;
+  const todos = sortedTodos(offer.must_do ?? []);
+
   useEffect(() => {
     getSettings().then((s) =>
       setAgency({ agencyName: s.agencyName, agencyLogo: s.agencyLogo }),
@@ -46,8 +53,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
       const fresh = await getSettings();
       setAgency({ agencyName: fresh.agencyName, agencyLogo: fresh.agencyLogo });
       await new Promise((r) => requestAnimationFrame(() => r(null)));
-
-      const filename = `${safeFilename(offer.school)}-offer.png`;
+      const filename = `${safeFilename(schoolZh)}-offer.png`;
       const result = await exportNodeToImage(cardRef.current, filename);
       setToast(result.mode === "shared" ? "已分享" : "已保存图片");
     } catch (err) {
@@ -67,8 +73,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     updated.info_gaps = pruneInfoGaps(updated);
     await onUpdate(updated);
     setEditingFee(null);
-    setToast("已保存");
-    setTimeout(() => setToast(null), 1800);
+    flashToast("已保存");
   }
 
   async function rerunResearch() {
@@ -77,17 +82,17 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     try {
       const settings = await getSettings();
       if (!settings.apiKey) {
-        setToast("请先在设置中填入 API Key");
+        flashToast("请先在设置中填入 API Key", 3000);
         return;
       }
       if ((settings.provider ?? "google") !== "google") {
-        setToast("仅 Google AI Studio 支持官网查询");
+        flashToast("仅 Google AI Studio 支持官网查询", 3000);
         return;
       }
-      setToast(`正在查 ${offer.school} 官网…`);
+      flashToast(`正在查 ${schoolZh} 官网…`, 60000);
       const research = await researchOffer(offer, { apiKey: settings.apiKey });
       if (!research) {
-        setToast("没有从官网查到新内容");
+        flashToast("没有从官网查到新内容", 3000);
         return;
       }
       const merged = applyResearch(offer, research);
@@ -99,13 +104,12 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
       ]
         .filter(Boolean)
         .join("、");
-      setToast(got ? `已从官网补全：${got}` : "没有从官网查到新内容");
+      flashToast(got ? `已从官网补全：${got}` : "没有从官网查到新内容", 3000);
     } catch (err) {
       console.error(err);
-      setToast("查询失败，请稍后再试");
+      flashToast("查询失败，请稍后再试", 3000);
     } finally {
       setResearching(false);
-      setTimeout(() => setToast(null), 3000);
     }
   }
 
@@ -119,8 +123,12 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     updated.info_gaps = pruneInfoGaps(updated);
     await onUpdate(updated);
     setEditingDuration(false);
-    setToast("已保存");
-    setTimeout(() => setToast(null), 1800);
+    flashToast("已保存");
+  }
+
+  function flashToast(message: string, ms = 1800) {
+    setToast(message);
+    setTimeout(() => setToast(null), ms);
   }
 
   return (
@@ -138,68 +146,126 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         </button>
       </div>
 
-      <header className="mb-16">
-        <div className="section-label">{offer.country || "—"}</div>
-        <h1 className="mt-4 font-display font-semibold text-5xl md:text-6xl tracking-tight">
-          {offer.school}
+      <header className="mb-12">
+        <div className="text-2xl md:text-3xl font-display font-semibold tracking-tight">
+          🎉 恭喜你获得录取！
+        </div>
+        <p className="mt-2 text-ink-500">以下是录取的详细信息。</p>
+
+        <h1 className="mt-10 font-display font-semibold text-5xl md:text-6xl tracking-tight">
+          {schoolZh}
         </h1>
-        <p className="mt-4 text-xl md:text-2xl text-ink-500 flex flex-wrap items-baseline gap-x-3">
-          <span>{offer.program}</span>
-          {offer.degree && <span>· {offer.degree}</span>}
-          {editingDuration ? (
-            <span className="inline-flex items-center gap-2">
-              ·
-              <input
-                autoFocus
-                value={durationDraft}
-                onChange={(e) => setDurationDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveDuration();
-                  if (e.key === "Escape") {
-                    setEditingDuration(false);
-                    setDurationDraft(offer.duration ?? "");
-                  }
-                }}
-                placeholder="例如 1.5 年"
-                className="px-3 py-1 rounded-lg bg-ink-100 dark:bg-black border border-transparent focus:border-accent focus:outline-none text-base w-32"
-              />
-              <button
-                onClick={saveDuration}
-                className="text-sm text-accent hover:underline"
-              >
-                保存
-              </button>
-              <button
-                onClick={() => {
-                  setEditingDuration(false);
-                  setDurationDraft(offer.duration ?? "");
-                }}
-                className="text-sm text-ink-500 hover:text-ink-900 dark:hover:text-ink-100"
-              >
-                取消
-              </button>
-            </span>
-          ) : offer.duration ? (
-            <button
-              onClick={() => setEditingDuration(true)}
-              className="hover:text-ink-900 dark:hover:text-ink-100 transition-colors"
-              title="点击修改"
-            >
-              · {offer.duration}
-            </button>
-          ) : (
-            <button
-              onClick={() => setEditingDuration(true)}
-              className="text-sm text-accent hover:underline"
-            >
-              · 添加学制
-            </button>
-          )}
-        </p>
+        {schoolZh !== offer.school && (
+          <p className="mt-3 text-base text-ink-500">{offer.school}</p>
+        )}
       </header>
 
+      <Section label="基本信息">
+        <div className="card divide-y divide-ink-100 dark:divide-ink-700">
+          <Fact
+            label="录取专业"
+            value={programZh ? programZh : offer.program}
+            secondary={programZh && offer.program ? offer.program : undefined}
+          />
+          {(degreeZh || offer.degree) && (
+            <Fact label="学位" value={degreeZh ?? offer.degree ?? "—"} />
+          )}
+          <Fact
+            label="学习时长"
+            value={
+              editingDuration ? (
+                <span className="inline-flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={durationDraft}
+                    onChange={(e) => setDurationDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveDuration();
+                      if (e.key === "Escape") {
+                        setEditingDuration(false);
+                        setDurationDraft(offer.duration ?? "");
+                      }
+                    }}
+                    placeholder="例如 1.5 年"
+                    className="px-3 py-1 rounded-lg bg-ink-100 dark:bg-black border border-transparent focus:border-accent focus:outline-none text-base w-32"
+                  />
+                  <button
+                    onClick={saveDuration}
+                    className="text-sm text-accent hover:underline"
+                  >
+                    保存
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingDuration(false);
+                      setDurationDraft(offer.duration ?? "");
+                    }}
+                    className="text-sm text-ink-500 hover:text-ink-900 dark:hover:text-ink-100"
+                  >
+                    取消
+                  </button>
+                </span>
+              ) : offer.duration ? (
+                <button
+                  onClick={() => setEditingDuration(true)}
+                  className="hover:text-accent transition-colors"
+                  title="点击修改"
+                >
+                  {offer.duration}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setEditingDuration(true)}
+                  className="text-accent hover:underline text-base"
+                >
+                  + 添加
+                </button>
+              )
+            }
+          />
+          {termStart && (
+            <Fact
+              label="开学时间"
+              value={
+                <span className="inline-flex items-baseline gap-2">
+                  <span>{formatDate(termStart)}</span>
+                  <CountdownPill date={termStart} />
+                </span>
+              }
+            />
+          )}
+          {countryZh && <Fact label="国家 / 地区" value={countryZh} />}
+        </div>
+      </Section>
+
+      <Section label="费用">
+        <div className="grid md:grid-cols-3 gap-6">
+          <FeeBlock
+            title="学费"
+            money={offer.fees?.tuition}
+            school={schoolZh}
+            program={offer.program}
+            onEdit={() => setEditingFee("tuition")}
+          />
+          <FeeBlock
+            title="留位费"
+            money={offer.fees?.deposit}
+            school={schoolZh}
+            program={offer.program}
+            onEdit={() => setEditingFee("deposit")}
+          />
+          <FeeBlock
+            title="奖学金"
+            money={offer.fees?.scholarship}
+            school={schoolZh}
+            program={offer.program}
+            onEdit={() => setEditingFee("scholarship")}
+          />
+        </div>
+      </Section>
+
       {offer.info_gaps && offer.info_gaps.length > 0 && (
-        <section className="mb-12 rounded-card border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/40 p-6">
+        <section className="mb-16 rounded-card border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/40 p-6">
           <div className="text-xs uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300 font-medium mb-3">
             需要核实
           </div>
@@ -217,17 +283,16 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               disabled={researching}
               className="text-xs px-3 py-1.5 rounded-full bg-amber-200/70 dark:bg-amber-800/40 text-amber-900 dark:text-amber-100 hover:bg-amber-300/70 dark:hover:bg-amber-800/60 transition-colors disabled:opacity-60"
             >
-              {researching ? "查询中…" : `重新查 ${offer.school} 官网`}
+              {researching ? "查询中…" : `重新查 ${schoolZh} 官网`}
             </button>
             <span className="text-xs text-amber-700/80 dark:text-amber-300/80">
-              或点击下方任意费用卡片手动修正
+              或点击费用卡片手动修正
             </span>
           </div>
         </section>
       )}
 
-      {(offer.fees?.tuition?.is_estimate ||
-        offer.fees?.tuition?.is_partial) &&
+      {(offer.fees?.tuition?.is_estimate || offer.fees?.tuition?.is_partial) &&
         !offer.info_gaps?.length && (
           <div className="mb-12 -mt-4">
             <button
@@ -235,137 +300,76 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               disabled={researching}
               className="text-xs px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors disabled:opacity-60"
             >
-              {researching ? "查询中…" : `重新查 ${offer.school} 官网补全学费`}
+              {researching ? "查询中…" : `重新查 ${schoolZh} 官网补全学费`}
             </button>
           </div>
         )}
 
-      <Section label="关键日期">
-        {offer.key_dates?.length ? (
-          <div className="divide-y divide-ink-100 dark:divide-ink-700">
-            {offer.key_dates.map((k, i) => {
-              const d = formatDaysLeft(daysUntil(k.date));
-              const overdue = daysUntil(k.date) < 0;
-              return (
-                <div
-                  key={i}
-                  className="py-5 flex items-baseline justify-between gap-4"
-                >
-                  <div className="min-w-0">
-                    <div className="text-lg font-medium truncate">
-                      {k.label}
-                    </div>
-                    <div className="text-sm text-ink-500">
-                      {formatDate(k.date)}
-                    </div>
-                  </div>
-                  <div
-                    className={`shrink-0 tabular text-xl font-semibold ${
-                      overdue ? "text-red-500" : "text-accent"
-                    }`}
-                  >
-                    {d.value}
-                    <span className="ml-1 text-sm font-normal text-ink-500">
-                      {d.unit}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <Empty />
-        )}
-      </Section>
-
-      <Section label="费用">
-        <div className="grid md:grid-cols-3 gap-6">
-          <FeeBlock
-            title="学费"
-            money={offer.fees?.tuition}
-            school={offer.school}
-            program={offer.program}
-            onEdit={() => setEditingFee("tuition")}
-          />
-          <FeeBlock
-            title="留位费"
-            money={offer.fees?.deposit}
-            school={offer.school}
-            program={offer.program}
-            onEdit={() => setEditingFee("deposit")}
-          />
-          <FeeBlock
-            title="奖学金"
-            money={offer.fees?.scholarship}
-            school={offer.school}
-            program={offer.program}
-            onEdit={() => setEditingFee("scholarship")}
-          />
-        </div>
-      </Section>
-
-      {offer.must_do && offer.must_do.length > 0 && (
-        <Section label="必做事项">
-          <ul className="space-y-3">
-            {offer.must_do.map((m, i) => (
-              <li key={i} className="card p-5 flex items-start gap-4">
-                <span
-                  className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
-                    m.priority === "high"
-                      ? "bg-red-500"
-                      : m.priority === "medium"
-                      ? "bg-accent"
-                      : "bg-ink-300"
-                  }`}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium">{m.action}</div>
-                  {m.deadline && (
-                    <div className="text-sm text-ink-500 mt-1">
-                      截止 {formatDate(m.deadline)}
-                    </div>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
-
       {offer.conditions && offer.conditions.length > 0 && (
         <Section label="录取条件">
-          <ul className="space-y-2">
+          <ol className="space-y-3">
             {offer.conditions.map((c, i) => (
-              <li key={i} className="flex items-start gap-3 py-2">
-                <span className="text-ink-500 shrink-0">
-                  {c.status === "met" ? "✓" : "○"}
+              <li key={i} className="flex items-start gap-4">
+                <span className="text-ink-500 font-medium tabular shrink-0 w-6">
+                  {i + 1}.
                 </span>
                 <div className="flex-1">
-                  <div>{c.item}</div>
+                  <div className="flex items-baseline gap-2">
+                    <span>{c.item}</span>
+                    {c.status === "met" && (
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                        ✓ 已满足
+                      </span>
+                    )}
+                    {c.status === "optional" && (
+                      <span className="text-xs text-ink-500">（选做）</span>
+                    )}
+                  </div>
                   {c.deadline && (
-                    <div className="text-xs text-ink-500 mt-0.5">
+                    <div className="text-xs text-ink-500 mt-1">
                       截止 {formatDate(c.deadline)}
                     </div>
                   )}
                 </div>
               </li>
             ))}
-          </ul>
+          </ol>
         </Section>
       )}
 
-      {offer.raw_highlights && offer.raw_highlights.length > 0 && (
-        <Section label="原文摘录">
-          <div className="space-y-3">
-            {offer.raw_highlights.map((h, i) => (
-              <blockquote
-                key={i}
-                className="border-l-2 border-accent pl-5 py-1 text-ink-700 dark:text-ink-300 italic"
-              >
-                {h}
-              </blockquote>
+      {todos.length > 0 && (
+        <Section label="接下来你要做的">
+          <ol className="space-y-4">
+            {todos.map((m, i) => (
+              <li key={i} className="card p-5 flex items-start gap-4">
+                <span className="text-ink-500 font-medium tabular shrink-0 w-6">
+                  {i + 1}.
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span
+                      className={`font-medium ${
+                        m.priority === "high" ? "text-red-600 dark:text-red-400" : ""
+                      }`}
+                    >
+                      {m.action}
+                    </span>
+                    {m.priority === "high" && (
+                      <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                        紧急
+                      </span>
+                    )}
+                  </div>
+                  {m.deadline && (
+                    <div className="text-sm text-ink-500 mt-1.5 flex items-baseline gap-2">
+                      <span>截止 {formatDate(m.deadline)}</span>
+                      <CountdownPill date={m.deadline} />
+                    </div>
+                  )}
+                </div>
+              </li>
             ))}
-          </div>
+          </ol>
         </Section>
       )}
 
@@ -434,6 +438,50 @@ function Section({
   );
 }
 
+function Fact({
+  label,
+  value,
+  secondary,
+}: {
+  label: string;
+  value: React.ReactNode;
+  secondary?: string;
+}) {
+  return (
+    <div className="px-6 py-4 flex items-baseline gap-6">
+      <div className="text-sm text-ink-500 w-24 shrink-0">{label}</div>
+      <div className="flex-1 min-w-0">
+        <div className="text-base">{value}</div>
+        {secondary && (
+          <div className="text-xs text-ink-500 mt-1">{secondary}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CountdownPill({ date }: { date: string }) {
+  const days = daysUntil(date);
+  const d = formatDaysLeft(days);
+  if (d.value === "—") return null;
+  const overdue = days < 0;
+  return (
+    <span
+      className={`text-xs tabular ${
+        overdue
+          ? "text-red-500"
+          : days <= 14
+          ? "text-amber-600 dark:text-amber-400"
+          : "text-ink-500"
+      }`}
+    >
+      {overdue ? "已过 " : "还剩 "}
+      {d.value}
+      {d.unit && ` ${d.unit}`}
+    </span>
+  );
+}
+
 function FeeBlock({
   title,
   money,
@@ -462,9 +510,7 @@ function FeeBlock({
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm text-ink-500">{title}</div>
         <div className="flex items-center gap-1.5">
-          {verified && (
-            <Badge tone="green">✓ 已校对</Badge>
-          )}
+          {verified && <Badge tone="green">✓ 已校对</Badge>}
           {partial && <Badge tone="amber">首期 / 不完整</Badge>}
           {estimate && <Badge tone="amber">估算</Badge>}
           <span className="text-ink-300 dark:text-ink-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
@@ -526,6 +572,16 @@ function buildVerifyUrl(school: string, program: string, title: string): string 
   return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
 }
 
-function Empty() {
-  return <div className="text-ink-500">—</div>;
+function sortedTodos(todos: MustDo[]): MustDo[] {
+  const PRIORITY = { high: 0, medium: 1, low: 2 } as const;
+  return [...todos].sort((a, b) => {
+    if (a.deadline && b.deadline) {
+      const da = daysUntil(a.deadline);
+      const db = daysUntil(b.deadline);
+      if (Number.isFinite(da) && Number.isFinite(db) && da !== db) return da - db;
+    }
+    if (a.deadline && !b.deadline) return -1;
+    if (!a.deadline && b.deadline) return 1;
+    return PRIORITY[a.priority] - PRIORITY[b.priority];
+  });
 }

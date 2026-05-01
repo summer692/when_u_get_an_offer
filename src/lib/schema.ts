@@ -54,9 +54,17 @@ export interface MustDo {
 
 export interface ExtractedOffer {
   school: string;
+  /** 学校的常见中文名，如 "香港理工大学"。若没有公认中文名则缺省。 */
+  school_zh?: string;
   program: string;
+  /** 项目的中文名，如 "可持续能源理学硕士"。 */
+  program_zh?: string;
   degree?: string;
+  /** 学位中文名："硕士" / "学士" / "博士" / "工程硕士" 等。 */
+  degree_zh?: string;
   country?: string;
+  /** 国家 / 地区中文名："中国香港" / "英国" / "美国" 等。 */
+  country_zh?: string;
   language?: string;
   /** Programme duration as written on the offer, e.g. "1.5 年", "2 years",
    * "30 credits". Optional but the LLM is instructed to always try. */
