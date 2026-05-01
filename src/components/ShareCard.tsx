@@ -183,26 +183,24 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         <Section title="费用">
           {offer.fees?.tuition && (
             <Row
-              label={
-                offer.fees.tuition.is_partial ? "学费（首期）" : "学费"
-              }
-              value={formatMoney(offer.fees.tuition)}
+              label={feeLabel("学费", offer.fees.tuition)}
+              value={feeValue(offer.fees.tuition)}
               trailing={offer.fees.tuition.note}
               isLast={!offer.fees?.deposit && !offer.fees?.scholarship}
             />
           )}
           {offer.fees?.deposit && (
             <Row
-              label="留位费"
-              value={formatMoney(offer.fees.deposit)}
+              label={feeLabel("留位费", offer.fees.deposit)}
+              value={feeValue(offer.fees.deposit)}
               trailing={offer.fees.deposit.note}
               isLast={!offer.fees?.scholarship}
             />
           )}
           {offer.fees?.scholarship && (
             <Row
-              label="奖学金"
-              value={formatMoney(offer.fees.scholarship)}
+              label={feeLabel("奖学金", offer.fees.scholarship)}
+              value={feeValue(offer.fees.scholarship)}
               trailing={offer.fees.scholarship.note}
               isLast
             />
@@ -406,6 +404,19 @@ function Row({
       </div>
     </div>
   );
+}
+
+function feeLabel(base: string, m: import("../lib/schema").Money): string {
+  if (m.manually_edited) return base;
+  if (m.is_partial) return `${base}（首期）`;
+  if (m.is_estimate) return `${base}（估算）`;
+  return base;
+}
+
+function feeValue(m: import("../lib/schema").Money): string {
+  const f = formatMoney(m);
+  if (!m.manually_edited && m.is_estimate && f !== "—") return `≈ ${f}`;
+  return f;
 }
 
 function pickHeroDate(offer: Offer) {

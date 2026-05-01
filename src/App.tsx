@@ -15,7 +15,7 @@ import type { ExtractedOffer, Offer } from "./lib/schema";
 
 export default function App() {
   useTheme();
-  const { offers, loading, add, remove } = useOffers();
+  const { offers, loading, add, remove, update } = useOffers();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
@@ -114,6 +114,7 @@ export default function App() {
         <OfferDetail
           offer={active}
           onBack={() => setActiveId(null)}
+          onUpdate={update}
           onDelete={async () => {
             await remove(active.id);
             setActiveId(null);

@@ -1,24 +1,32 @@
 import { useEffect, useRef, useState } from "react";
-import type { Offer, Settings } from "../lib/schema";
+import type { Money, Offer, Settings } from "../lib/schema";
 import { daysUntil, formatDaysLeft } from "../lib/countdown";
 import { formatDate, formatMoney } from "../lib/format";
 import { getSettings } from "../lib/db";
 import { exportNodeToImage, safeFilename } from "../lib/exportImage";
 import { ShareCard } from "./ShareCard";
+import { MoneyEditor } from "./MoneyEditor";
+import { pruneInfoGaps } from "../lib/llm";
+
+type FeeKey = "tuition" | "deposit" | "scholarship";
 
 interface Props {
   offer: Offer;
   onBack: () => void;
   onDelete: () => void;
+  onUpdate: (offer: Offer) => Promise<void> | void;
 }
 
-export function OfferDetail({ offer, onBack, onDelete }: Props) {
+export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [agency, setAgency] = useState<
     Pick<Settings, "agencyName" | "agencyLogo">
   >({});
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [editingFee, setEditingFee] = useState<FeeKey | null>(null);
+  const [editingDuration, setEditingDuration] = useState(false);
+  const [durationDraft, setDurationDraft] = useState(offer.duration ?? "");
 
   useEffect(() => {
     getSettings().then((s) =>
@@ -26,14 +34,16 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
     );
   }, []);
 
+  useEffect(() => {
+    setDurationDraft(offer.duration ?? "");
+  }, [offer.duration]);
+
   async function handleExport() {
     if (!cardRef.current || exporting) return;
     setExporting(true);
     try {
-      // Re-read settings so that brand changes apply without a refresh.
       const fresh = await getSettings();
       setAgency({ agencyName: fresh.agencyName, agencyLogo: fresh.agencyLogo });
-      // Wait for React to commit the updated brand into the offscreen card.
       await new Promise((r) => requestAnimationFrame(() => r(null)));
 
       const filename = `${safeFilename(offer.school)}-offer.png`;
@@ -46,6 +56,32 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
       setExporting(false);
       setTimeout(() => setToast(null), 2400);
     }
+  }
+
+  async function saveFee(key: FeeKey, next: Money | null) {
+    const fees = { ...(offer.fees ?? {}) };
+    if (next) fees[key] = next;
+    else delete fees[key];
+    const updated: Offer = { ...offer, fees };
+    updated.info_gaps = pruneInfoGaps(updated);
+    await onUpdate(updated);
+    setEditingFee(null);
+    setToast("已保存");
+    setTimeout(() => setToast(null), 1800);
+  }
+
+  async function saveDuration() {
+    const next = durationDraft.trim() || undefined;
+    if (next === (offer.duration ?? undefined)) {
+      setEditingDuration(false);
+      return;
+    }
+    const updated: Offer = { ...offer, duration: next };
+    updated.info_gaps = pruneInfoGaps(updated);
+    await onUpdate(updated);
+    setEditingDuration(false);
+    setToast("已保存");
+    setTimeout(() => setToast(null), 1800);
   }
 
   return (
@@ -68,10 +104,58 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
         <h1 className="mt-4 font-display font-semibold text-5xl md:text-6xl tracking-tight">
           {offer.school}
         </h1>
-        <p className="mt-4 text-xl md:text-2xl text-ink-500">
-          {offer.program}
-          {offer.degree && <span className="ml-3">· {offer.degree}</span>}
-          {offer.duration && <span className="ml-3">· {offer.duration}</span>}
+        <p className="mt-4 text-xl md:text-2xl text-ink-500 flex flex-wrap items-baseline gap-x-3">
+          <span>{offer.program}</span>
+          {offer.degree && <span>· {offer.degree}</span>}
+          {editingDuration ? (
+            <span className="inline-flex items-center gap-2">
+              ·
+              <input
+                autoFocus
+                value={durationDraft}
+                onChange={(e) => setDurationDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveDuration();
+                  if (e.key === "Escape") {
+                    setEditingDuration(false);
+                    setDurationDraft(offer.duration ?? "");
+                  }
+                }}
+                placeholder="例如 1.5 年"
+                className="px-3 py-1 rounded-lg bg-ink-100 dark:bg-black border border-transparent focus:border-accent focus:outline-none text-base w-32"
+              />
+              <button
+                onClick={saveDuration}
+                className="text-sm text-accent hover:underline"
+              >
+                保存
+              </button>
+              <button
+                onClick={() => {
+                  setEditingDuration(false);
+                  setDurationDraft(offer.duration ?? "");
+                }}
+                className="text-sm text-ink-500 hover:text-ink-900 dark:hover:text-ink-100"
+              >
+                取消
+              </button>
+            </span>
+          ) : offer.duration ? (
+            <button
+              onClick={() => setEditingDuration(true)}
+              className="hover:text-ink-900 dark:hover:text-ink-100 transition-colors"
+              title="点击修改"
+            >
+              · {offer.duration}
+            </button>
+          ) : (
+            <button
+              onClick={() => setEditingDuration(true)}
+              className="text-sm text-accent hover:underline"
+            >
+              · 添加学制
+            </button>
+          )}
         </p>
       </header>
 
@@ -88,6 +172,9 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
               </li>
             ))}
           </ul>
+          <p className="mt-3 text-xs text-amber-700/80 dark:text-amber-300/80">
+            点击下方任意费用卡片可手动修正。
+          </p>
         </section>
       )}
 
@@ -133,22 +220,24 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
         <div className="grid md:grid-cols-3 gap-6">
           <FeeBlock
             title="学费"
-            value={formatMoney(offer.fees?.tuition)}
-            note={offer.fees?.tuition?.note}
-            warn={offer.fees?.tuition?.is_partial ? "首期 / 不完整" : undefined}
-            source={offer.fees?.tuition?.source}
+            money={offer.fees?.tuition}
+            school={offer.school}
+            program={offer.program}
+            onEdit={() => setEditingFee("tuition")}
           />
           <FeeBlock
             title="留位费"
-            value={formatMoney(offer.fees?.deposit)}
-            note={offer.fees?.deposit?.note}
-            source={offer.fees?.deposit?.source}
+            money={offer.fees?.deposit}
+            school={offer.school}
+            program={offer.program}
+            onEdit={() => setEditingFee("deposit")}
           />
           <FeeBlock
             title="奖学金"
-            value={formatMoney(offer.fees?.scholarship)}
-            note={offer.fees?.scholarship?.note}
-            source={offer.fees?.scholarship?.source}
+            money={offer.fees?.scholarship}
+            school={offer.school}
+            program={offer.program}
+            onEdit={() => setEditingFee("scholarship")}
           />
         </div>
       </Section>
@@ -227,7 +316,20 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
         </button>
       </div>
 
-      {/* Offscreen poster used for image export */}
+      <MoneyEditor
+        open={editingFee !== null}
+        title={
+          editingFee === "tuition"
+            ? "学费"
+            : editingFee === "deposit"
+            ? "留位费"
+            : "奖学金"
+        }
+        initial={editingFee ? offer.fees?.[editingFee] ?? null : null}
+        onClose={() => setEditingFee(null)}
+        onSave={(next) => editingFee && saveFee(editingFee, next)}
+      />
+
       <div
         aria-hidden
         style={{
@@ -272,42 +374,80 @@ function Section({
 
 function FeeBlock({
   title,
-  value,
-  note,
-  warn,
-  source,
+  money,
+  school,
+  program,
+  onEdit,
 }: {
   title: string;
-  value: string;
-  note?: string;
-  warn?: string;
-  source?: string;
+  money?: Money | null;
+  school: string;
+  program: string;
+  onEdit: () => void;
 }) {
+  const value = formatMoney(money);
+  const verified = money?.manually_edited;
+  const partial = money?.is_partial && !verified;
+  const estimate = money?.is_estimate && !verified && !partial;
+  const showApprox = estimate;
+  const verifyUrl = money?.source ?? buildVerifyUrl(school, program, title);
+
   return (
-    <div className="card p-6">
+    <div
+      onClick={onEdit}
+      className="card p-6 cursor-pointer hover:-translate-y-0.5 hover:shadow-lg transition-all group"
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm text-ink-500">{title}</div>
-        {warn && (
-          <div className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-            {warn}
-          </div>
-        )}
+        <div className="flex items-center gap-1.5">
+          {verified && (
+            <Badge tone="green">✓ 已校对</Badge>
+          )}
+          {partial && <Badge tone="amber">首期 / 不完整</Badge>}
+          {estimate && <Badge tone="amber">估算</Badge>}
+          <span className="text-ink-300 dark:text-ink-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+            点击编辑
+          </span>
+        </div>
       </div>
       <div className="mt-2 text-2xl font-display font-semibold tabular">
-        {value}
+        {showApprox && value !== "—" ? `≈ ${value}` : value}
       </div>
-      {note && <div className="mt-2 text-xs text-ink-500">{note}</div>}
-      {source && (
+      {money?.note && (
+        <div className="mt-2 text-xs text-ink-500">{money.note}</div>
+      )}
+      {money && money.amount > 0 && (
         <a
-          href={source}
+          href={verifyUrl}
           target="_blank"
           rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
           className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline"
         >
-          via {hostOf(source)} ↗
+          {money.source ? `via ${hostOf(money.source)}` : "去官网核对"} ↗
         </a>
       )}
     </div>
+  );
+}
+
+function Badge({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone: "amber" | "green";
+}) {
+  const cls =
+    tone === "green"
+      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+      : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
+  return (
+    <span
+      className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${cls}`}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -317,6 +457,11 @@ function hostOf(url: string): string {
   } catch {
     return url;
   }
+}
+
+function buildVerifyUrl(school: string, program: string, title: string): string {
+  const q = `${school} ${program} ${title === "学费" ? "tuition fee" : title} site:edu OR site:edu.hk OR site:ac.uk`;
+  return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
 }
 
 function Empty() {

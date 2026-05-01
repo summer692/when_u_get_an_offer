@@ -35,5 +35,14 @@ export function useOffers() {
     [refresh]
   );
 
-  return { offers, loading, add, remove, refresh };
+  const update = useCallback(
+    async (offer: Offer) => {
+      const next: Offer = { ...offer, updated_at: Date.now() };
+      await saveOffer(next);
+      await refresh();
+    },
+    [refresh]
+  );
+
+  return { offers, loading, add, remove, update, refresh };
 }

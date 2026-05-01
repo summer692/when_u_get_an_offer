@@ -108,14 +108,16 @@ fees.deposit 的语义（重要）：
 - 例子：PolyU offer 的 Debit Note 1 写 "Caution Money 400 + Tuition fee 102,000 = Total 102,400, Payment Deadline 19-Mar-2026"，则 fees.deposit = { amount: 102400, currency: "HKD", note: "Caution Money 400 + 首期学费 102,000" }，并在 key_dates 中加 deposit_deadline=2026-03-19，在 must_do 中加高优先级"在 2026-03-19 前缴纳 HK$102,400 以确认录取"。
 - 如果 offer 只有一个独立的 "refundable deposit" 数字（不含首期学费），那 fees.deposit 就是这个独立数字。
 
-学费计算（优先尝试，避免 is_partial）：
+学费计算（优先尝试，但要标为估算）：
 - **如果 offer 同时给出了"项目总学分"（如 "Programme Credit Requirements: 31.0"、"30 credits in total"、"修读 30 学分"）和"按学分单价"（如 "HK$8,500/credit"），请你自己用乘法算出全程总学费，并填到 tuition：**
   amount = 总学分 × 单价
   period = "total"
   is_partial = false
-  note = "{总学分} 学分 × {币种}{单价}（依据 offer）"
-- 同理：如果 offer 给出"按年学费 + 学制年数"，也可以直接相乘得到 total。
+  is_estimate = true   // 必须！自己算出来的数字一律标为估算，因为可能存在论文学分豁免、奖学金抵扣等 offer 上未写明的细则
+  note = "{总学分} 学分 × {币种}{单价}（依据 offer 估算，未核实学分豁免）"
+- 同理：如果 offer 给出"按年学费 + 学制年数"，也可以直接相乘得到 total，同样设 is_estimate = true。
 - **必须真的相乘得出一个具体的整数**，不要只写公式不写数字。
+- 只有 offer 上**直接写明了**项目总学费数字（不是按学分/按年推算的），才能 is_estimate = false。
 
 学费仍然不完整时（is_partial = true）：
 - 只有在 offer 上的学费数字是"首期 / 单学期 / 单学分 / 一部分付款"，并且**也无法从 offer 自身算出总额**时，才把它放到 tuition 并设 is_partial = true。
@@ -302,11 +304,12 @@ export async function researchOffer(
 入学时间：${termStart ?? "未知"}
 
 请补全以下字段。规则：
-1. **只能用学校官方网站**（如 .edu.hk、.edu、.ac.uk、.edu.au、.edu.cn 等学校自己的域名），不要用第三方留学网站。
+1. **只能用学校官方网站**（如 .edu.hk、.edu、.ac.uk、.edu.au、.edu.cn 等学校自己的域名），不要用第三方留学网站、论坛、知乎、小红书等。
 2. 如果官网公布了"X 学分 × Y/学分"，请算出 X*Y 作为 total 学费。
-3. 学费必须明确币种 (HKD / USD / GBP 等三字母 ISO 代码)。
-4. 入学时间用于确认你查到的是该届新生的费率（例如 2026/27 入学）。
-5. 如果搜不到具体数字，对应字段返回 null。**绝对不要编造**。
+3. **特别留意可能的减免规则**——很多项目存在学分豁免（如 dissertation credit fee-waived、capstone credit non-tuition）、奖学金内置折扣、首学期减免、本地 vs 非本地费率差异。看到"fee waiver / exempt / non-tuition / scholarship-discounted"等字眼时必须读完整段并把规则反映到 amount 或 note 里。
+4. 学费必须明确币种 (HKD / USD / GBP 等三字母 ISO 代码)。
+5. 入学时间用于确认你查到的是该届新生的费率（例如 2026/27 入学）。如果你只能查到旧届费率，请在 note 里注明并返回 null amount，让用户自己核对。
+6. 如果搜不到具体数字，对应字段返回 null。**绝对不要编造**。
 
 请输出一段 JSON（包在 \`\`\`json 代码块里）：
 
@@ -406,7 +409,13 @@ export function applyResearch(
 ): ExtractedOffer {
   const merged: ExtractedOffer = { ...offer, fees: { ...(offer.fees ?? {}) } };
   if (research.tuition) {
-    merged.fees!.tuition = { ...research.tuition, is_partial: false };
+    // Research from the school's website is treated as authoritative (not an
+    // estimate, not partial). User can still manually override later.
+    merged.fees!.tuition = {
+      ...research.tuition,
+      is_partial: false,
+      is_estimate: false,
+    };
   }
   if (research.scholarship && !merged.fees!.scholarship) {
     merged.fees!.scholarship = research.scholarship;

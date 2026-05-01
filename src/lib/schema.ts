@@ -21,6 +21,13 @@ export interface Money {
    * installment, per-credit billing, per-semester) and the user must look up
    * the full amount elsewhere. */
   is_partial?: boolean;
+  /** True if this number was computed by the AI (e.g. credits × per-credit
+   * rate) rather than read directly. The math may be right but miss
+   * programme-specific waivers, so it should be shown as an estimate. */
+  is_estimate?: boolean;
+  /** True once the user has reviewed and saved this value manually. Renders
+   * a "已校对" affordance and overrides the partial / estimate badges. */
+  manually_edited?: boolean;
   /** URL of the source page when this number was looked up from the school's
    * official website rather than read directly off the offer. */
   source?: string;
