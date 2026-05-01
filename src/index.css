@@ -3,6 +3,16 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Editorial monochrome — accent flips by theme */
+    --accent: #0A0A0A;
+    --accent-hover: #000000;
+  }
+  .dark {
+    --accent: #FAFAFA;
+    --accent-hover: #FFFFFF;
+  }
+
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -38,32 +48,37 @@
 @layer components {
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2
-           rounded-full bg-accent px-6 py-3 text-white
-           font-medium transition-all duration-200 ease-apple
-           hover:bg-accent-hover active:scale-[0.98]
-           focus:outline-none focus:ring-2 focus:ring-accent/40;
+           rounded-full bg-ink-900 dark:bg-white px-6 py-3 text-white dark:text-ink-900
+           text-sm font-medium tracking-wide transition-all duration-200 ease-apple
+           hover:bg-black dark:hover:bg-ink-100 active:scale-[0.98]
+           focus:outline-none focus:ring-1 focus:ring-ink-900/40 dark:focus:ring-white/40;
   }
 
   .btn-ghost {
     @apply inline-flex items-center gap-2 rounded-full
-           px-5 py-2.5 text-ink-700 dark:text-ink-300
+           px-4 py-2 text-sm text-ink-700 dark:text-ink-300
            transition-colors duration-200 ease-apple
-           hover:bg-ink-100 dark:hover:bg-ink-900;
+           hover:text-ink-900 dark:hover:text-white;
   }
 
+  /* "Card" is intentionally minimal: hairline border, no shadow, square corners. */
   .card {
-    @apply rounded-card bg-white dark:bg-ink-900
+    @apply rounded-card bg-white dark:bg-black
            border border-ink-100 dark:border-ink-700
-           shadow-card dark:shadow-card-dark
-           transition-all duration-300 ease-apple;
+           transition-colors duration-200 ease-apple;
   }
 
   .card-hover {
-    @apply hover:-translate-y-0.5 hover:shadow-lg;
+    @apply hover:border-ink-300 dark:hover:border-ink-500;
   }
 
   .section-label {
-    @apply text-xs uppercase tracking-[0.18em] text-ink-500 font-medium;
+    @apply text-[11px] uppercase tracking-[0.22em] text-ink-500 font-medium;
+  }
+
+  /* Hairline rule used as section divider */
+  .rule {
+    @apply h-px w-full bg-ink-100 dark:bg-ink-700;
   }
 
   .fade-up {

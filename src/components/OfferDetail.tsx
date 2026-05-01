@@ -133,8 +133,8 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   }
 
   return (
-    <div className="fade-up max-w-4xl mx-auto px-6 py-12">
-      <div className="flex items-center justify-between mb-10">
+    <div className="fade-up max-w-4xl mx-auto px-6 py-10">
+      <div className="flex items-center justify-between mb-16">
         <button onClick={onBack} className="btn-ghost -ml-3">
           ← 返回
         </button>
@@ -147,22 +147,30 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         </button>
       </div>
 
-      <header className="mb-12">
-        <div className="text-2xl md:text-3xl font-display font-semibold tracking-tight">
-          🎉 {offer.applicant_name ? `${offer.applicant_name}，` : ""}恭喜你获得录取！
+      <header className="mb-20">
+        <div className="section-label mb-10">
+          {offer.country_zh || offer.country || "Offer"}
         </div>
-        <p className="mt-2 text-ink-500">以下是录取的详细信息。</p>
 
-        <h1 className="mt-10 font-display font-semibold text-5xl md:text-6xl tracking-tight">
+        <p className="text-lg md:text-xl text-ink-700 dark:text-ink-300 font-display font-medium tracking-tight mb-2">
+          {offer.applicant_name ? `${offer.applicant_name}，` : ""}恭喜你获得录取。
+        </p>
+        <p className="text-sm text-ink-500 mb-14">以下是录取的详细信息</p>
+
+        <h1 className="font-display font-medium text-[44px] sm:text-6xl md:text-7xl lg:text-8xl tracking-[-0.04em] leading-[0.95] mb-6">
           {schoolZh}
         </h1>
         {schoolZh !== offer.school && (
-          <p className="mt-3 text-base text-ink-500">{offer.school}</p>
+          <p className="text-base text-ink-500 tracking-wide">
+            {offer.school}
+          </p>
         )}
       </header>
 
+      <div className="rule mb-12" />
+
       <Section label="基本信息">
-        <div className="card divide-y divide-ink-100 dark:divide-ink-700">
+        <div className="border-y border-ink-100 dark:border-ink-700 divide-y divide-ink-100 dark:divide-ink-700">
           <Fact
             label="录取专业"
             value={programZh ? programZh : offer.program}
@@ -212,11 +220,11 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                       }
                     }}
                     placeholder="例如 1.5 年"
-                    className="px-3 py-1 rounded-lg bg-ink-100 dark:bg-black border border-transparent focus:border-accent focus:outline-none text-base w-32"
+                    className="px-3 py-1 bg-ink-100 dark:bg-ink-900 border border-transparent focus:border-ink-900 dark:focus:border-white focus:outline-none text-base w-32"
                   />
                   <button
                     onClick={saveDuration}
-                    className="text-sm text-accent hover:underline"
+                    className="text-sm underline underline-offset-4"
                   >
                     保存
                   </button>
@@ -233,7 +241,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               ) : offer.duration ? (
                 <button
                   onClick={() => setEditingDuration(true)}
-                  className="hover:text-accent transition-colors"
+                  className="hover:underline underline-offset-4"
                   title="点击修改"
                 >
                   {offer.duration}
@@ -241,7 +249,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               ) : (
                 <button
                   onClick={() => setEditingDuration(true)}
-                  className="text-accent hover:underline text-base"
+                  className="underline underline-offset-4 text-base"
                 >
                   + 添加
                 </button>
@@ -452,7 +460,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
       </div>
 
       {toast && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-ink-900 dark:bg-white text-white dark:text-ink-900 px-5 py-3 rounded-full text-sm shadow-lg fade-up z-50">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-ink-900 dark:bg-white text-white dark:text-ink-900 px-5 py-3 text-sm fade-up z-50 tracking-wide">
           {toast}
         </div>
       )}
@@ -468,8 +476,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-16">
-      <h2 className="section-label mb-6">{label}</h2>
+    <section className="mb-20">
+      <h2 className="section-label mb-8">{label}</h2>
       {children}
     </section>
   );
@@ -485,12 +493,16 @@ function Fact({
   secondary?: string;
 }) {
   return (
-    <div className="px-6 py-4 flex items-baseline gap-6">
-      <div className="text-sm text-ink-500 w-24 shrink-0">{label}</div>
+    <div className="py-5 flex items-baseline gap-8">
+      <div className="text-sm text-ink-500 w-24 shrink-0 tracking-wide">
+        {label}
+      </div>
       <div className="flex-1 min-w-0">
-        <div className="text-base">{value}</div>
+        <div className="text-base leading-snug">{value}</div>
         {secondary && (
-          <div className="text-xs text-ink-500 mt-1">{secondary}</div>
+          <div className="text-xs text-ink-500 mt-1.5 tracking-wide">
+            {secondary}
+          </div>
         )}
       </div>
     </div>
@@ -542,24 +554,26 @@ function FeeBlock({
   return (
     <div
       onClick={onEdit}
-      className="card p-6 cursor-pointer hover:-translate-y-0.5 hover:shadow-lg transition-all group"
+      className="group p-6 border border-ink-100 dark:border-ink-700 hover:border-ink-900 dark:hover:border-white transition-colors cursor-pointer"
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="text-sm text-ink-500">{title}</div>
+        <div className="section-label">{title}</div>
         <div className="flex items-center gap-1.5">
-          {verified && <Badge tone="green">✓ 已校对</Badge>}
+          {verified && <Badge tone="green">已校对</Badge>}
           {partial && <Badge tone="amber">首期 / 不完整</Badge>}
           {estimate && <Badge tone="amber">估算</Badge>}
-          <span className="text-ink-300 dark:text-ink-700 text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-            点击编辑
+          <span className="text-ink-300 dark:text-ink-700 text-[10px] uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
+            编辑
           </span>
         </div>
       </div>
-      <div className="mt-2 text-2xl font-display font-semibold tabular">
+      <div className="mt-4 text-3xl font-display font-medium tabular tracking-tight">
         {showApprox && value !== "—" ? `≈ ${value}` : value}
       </div>
       {money?.note && (
-        <div className="mt-2 text-xs text-ink-500">{money.note}</div>
+        <div className="mt-3 text-xs text-ink-500 leading-relaxed">
+          {money.note}
+        </div>
       )}
       {money && money.amount > 0 && (
         money.source ? (
@@ -568,12 +582,12 @@ function FeeBlock({
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+            className="mt-4 inline-flex items-center gap-1 text-xs underline underline-offset-4 text-ink-500 hover:text-ink-900 dark:hover:text-white"
           >
             via {hostOf(money.source)} ↗
           </a>
         ) : isDeposit ? (
-          <div className="mt-3 text-xs text-ink-500">
+          <div className="mt-4 text-xs text-ink-500">
             请在 offer 中再次核对
           </div>
         ) : (
@@ -582,7 +596,7 @@ function FeeBlock({
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+            className="mt-4 inline-flex items-center gap-1 text-xs underline underline-offset-4 text-ink-500 hover:text-ink-900 dark:hover:text-white"
           >
             去官网核对 ↗
           </a>

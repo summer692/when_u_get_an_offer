@@ -5,56 +5,73 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Accent flips black ↔ white by theme via CSS var (set in index.css).
+        // Used for primary buttons, links, and emphasis throughout the app.
         accent: {
-          DEFAULT: "#0A84FF",
-          hover: "#0969DA",
+          DEFAULT: "var(--accent)",
+          hover: "var(--accent-hover)",
         },
         ink: {
-          900: "#1D1D1F",
-          700: "#3A3A3C",
-          500: "#86868B",
-          300: "#D2D2D7",
-          100: "#F5F5F7",
+          900: "#0A0A0A",
+          700: "#1F1F1F",
+          500: "#737373",
+          300: "#D4D4D4",
+          100: "#F5F5F5",
+          50: "#FAFAFA",
         },
         paper: {
-          DEFAULT: "#F5F1EA",
-          dark: "#1A1814",
-          warm: "#EFE9DD",
+          DEFAULT: "#FFFFFF",
+          dark: "#000000",
+          warm: "#FAFAFA",
         },
       },
       fontFamily: {
         display: [
-          "SF Pro Display",
+          '"SF Pro Display"',
           "Inter",
           "-apple-system",
           "BlinkMacSystemFont",
-          "PingFang SC",
-          "Noto Sans SC",
+          '"PingFang SC"',
+          '"Noto Sans SC"',
           "sans-serif",
         ],
         text: [
           "-apple-system",
           "BlinkMacSystemFont",
-          "SF Pro Text",
+          '"SF Pro Text"',
           "Inter",
-          "PingFang SC",
-          "Noto Sans SC",
+          '"PingFang SC"',
+          '"Noto Sans SC"',
           "sans-serif",
+        ],
+        serif: [
+          '"Source Serif 4"',
+          '"Source Serif Pro"',
+          '"Songti SC"',
+          '"Noto Serif SC"',
+          "Georgia",
+          "serif",
         ],
       },
       fontSize: {
-        hero: ["clamp(3rem, 8vw, 6rem)", { lineHeight: "1.05", letterSpacing: "-0.03em" }],
-        mega: ["clamp(4rem, 12vw, 8rem)", { lineHeight: "1", letterSpacing: "-0.04em" }],
+        hero: [
+          "clamp(3rem, 8vw, 6rem)",
+          { lineHeight: "1.05", letterSpacing: "-0.03em" },
+        ],
+        mega: [
+          "clamp(4rem, 12vw, 8rem)",
+          { lineHeight: "1", letterSpacing: "-0.04em" },
+        ],
       },
       borderRadius: {
-        card: "20px",
+        card: "2px",
       },
       transitionTimingFunction: {
         apple: "cubic-bezier(.2,.8,.2,1)",
       },
       boxShadow: {
-        card: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04)",
-        "card-dark": "0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.25)",
+        card: "none",
+        "card-dark": "none",
       },
     },
   },
