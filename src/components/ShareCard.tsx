@@ -24,9 +24,10 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
 
   const schoolZh = offer.school_zh || offer.school;
   const programZh = offer.program_zh;
-  const degreeZh = offer.degree_zh || offer.degree;
   const countryZh = offer.country_zh || offer.country;
-  const termStart = offer.key_dates?.find((k) => k.type === "term_start")?.date;
+  const termStartDate = offer.key_dates?.find((k) => k.type === "term_start")?.date;
+  const termStartDisplay =
+    termStartDate ? formatDate(termStartDate) : offer.term_start_text || null;
   const todos = sortedTodos(offer.must_do ?? []);
 
   return (
@@ -135,9 +136,8 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         }}
       >
         <FactRow label="录取专业" value={programZh || offer.program} secondary={programZh ? offer.program : undefined} />
-        {degreeZh && <FactRow label="学位" value={degreeZh} />}
+        {termStartDisplay && <FactRow label="入学时间" value={termStartDisplay} />}
         {offer.duration && <FactRow label="学习时长" value={offer.duration} />}
-        {termStart && <FactRow label="开学时间" value={formatDate(termStart)} />}
         {offer.fees?.tuition && (
           <FactRow
             label={feeLabel("学费", offer.fees.tuition)}

@@ -75,6 +75,7 @@ Schema:
   "country_zh": string | null,              // 国家或地区中文名，如 "中国香港" / "英国" / "美国"
   "language": string | null,                // offer 原文语言（如 "en", "zh", "fr"）
   "duration": string | null,                // 项目时长，如 "1 年" / "1.5 年" / "2 年" / "30 学分"
+  "term_start_text": string | null,         // 入学时间的中文描述（即使无具体日期，也要写学期+学年）
   "key_dates": [
     {
       "type": "accept_deadline" | "deposit_deadline" | "term_start" | "tuition_deadline" | "document_deadline" | "other",
@@ -96,6 +97,14 @@ Schema:
   "raw_highlights": [ string ],             // 原文中最关键的 1-5 句摘录
   "info_gaps": [ string ]                   // 缺失或需要核实的关键信息（中文，简短）
 }
+
+入学时间 (term_start_text) - 必填:
+- offer 上能看到的最具体的入学时间描述。优先级：**具体日期 > 学期+学年 > 仅学年**。
+- 如果 offer 给了具体开学日期（"Term starts: 2026-09-01"），key_dates 中加 type="term_start"，date="2026-09-01"，并把 term_start_text 写成 "2026 年 9 月 1 日"。
+- 如果 offer **没有具体日期**但给了学期+学年（最常见，如 "Semester 1 of the 2026/27 academic year"），key_dates 中**不要**加 term_start，但**必须**填 term_start_text = "2026/27 学年第一学期"。
+- 如果只给学年（"for 2026/27 entry"），term_start_text = "2026/27 学年"。
+- "Academic year 2026/27" = 2026 年秋季入学，**不是** 2025 年。
+- 中文化对照：Semester 1 / Term 1 / Fall = 第一学期；Semester 2 / Term 2 / Spring = 第二学期；Summer = 夏季学期。
 
 抽取规则：
 - 字段不确定就用 null 或空数组，**绝对不要编造**。
@@ -145,7 +154,7 @@ info_gaps（生成前必须做自检）：
 - 触发条件（任意命中且对应字段确实没填好才加）：
   - fees.tuition 为 null 或 is_partial 仍为 true → "学费仅显示首期，请到 [学校] 官网查询全程总学费"
   - duration 为 null → "未找到项目时长"
-  - key_dates 中**没有任何** type="term_start" 的条目 → "未找到具体开学日期"
+  - **term_start_text 也为 null 且 key_dates 中无任何 type="term_start"** → "未找到具体入学时间"（注意：只要 term_start_text 写了"2026/27 学年第一学期"这类描述，就**不要**加这条 gap）
   - offer 提到 caution / deposit / 留位费但 key_dates 中**没有任何** type="deposit_deadline" 的条目 → "未找到留位费截止日期"
 - 字段已抽取就**不要**报告这条 gap。
 
@@ -252,6 +261,7 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     country_zh: r?.country_zh ?? undefined,
     language: r?.language ?? undefined,
     duration: r?.duration ?? undefined,
+    term_start_text: r?.term_start_text ?? undefined,
     key_dates: Array.isArray(r?.key_dates) ? r!.key_dates : [],
     fees: r?.fees ?? undefined,
     conditions: Array.isArray(r?.conditions) ? r!.conditions : [],
@@ -271,9 +281,9 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
  */
 export function pruneInfoGaps(offer: ExtractedOffer): string[] {
   const gaps = offer.info_gaps ?? [];
-  const hasTermStart = offer.key_dates?.some(
-    (k) => k.type === "term_start" && !!k.date,
-  );
+  const hasTermStart =
+    offer.key_dates?.some((k) => k.type === "term_start" && !!k.date) ||
+    !!offer.term_start_text?.trim();
   const hasDepositDeadline = offer.key_dates?.some(
     (k) => k.type === "deposit_deadline" && !!k.date,
   );
@@ -289,7 +299,11 @@ export function pruneInfoGaps(offer: ExtractedOffer): string[] {
         s.includes("留位"))
     )
       return false;
-    if (hasTermStart && /(开学|入学日期|term[\s-]?start)/i.test(g)) return false;
+    if (
+      hasTermStart &&
+      /(开学|入学日期|入学时间|term[\s-]?start)/i.test(g)
+    )
+      return false;
     if (hasDuration && /(学制|时长|duration|学分.*总)/i.test(g)) return false;
     if (hasCompleteTuition && /(学费|tuition).*(首期|不完整|未找到|总学费)/i.test(g))
       return false;

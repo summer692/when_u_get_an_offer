@@ -31,9 +31,9 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
 
   const schoolZh = offer.school_zh || offer.school;
   const programZh = offer.program_zh;
-  const degreeZh = offer.degree_zh || offer.degree;
-  const countryZh = offer.country_zh || offer.country;
-  const termStart = offer.key_dates?.find((k) => k.type === "term_start")?.date;
+  const termStartDate = offer.key_dates?.find((k) => k.type === "term_start")?.date;
+  const termStartDisplay =
+    termStartDate ? formatDate(termStartDate) : offer.term_start_text || null;
   const todos = sortedTodos(offer.must_do ?? []);
 
   useEffect(() => {
@@ -167,8 +167,20 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
             value={programZh ? programZh : offer.program}
             secondary={programZh && offer.program ? offer.program : undefined}
           />
-          {(degreeZh || offer.degree) && (
-            <Fact label="学位" value={degreeZh ?? offer.degree ?? "—"} />
+          {termStartDisplay && (
+            <Fact
+              label="入学时间"
+              value={
+                termStartDate ? (
+                  <span className="inline-flex items-baseline gap-2">
+                    <span>{termStartDisplay}</span>
+                    <CountdownPill date={termStartDate} />
+                  </span>
+                ) : (
+                  termStartDisplay
+                )
+              }
+            />
           )}
           <Fact
             label="学习时长"
@@ -223,18 +235,6 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               )
             }
           />
-          {termStart && (
-            <Fact
-              label="开学时间"
-              value={
-                <span className="inline-flex items-baseline gap-2">
-                  <span>{formatDate(termStart)}</span>
-                  <CountdownPill date={termStart} />
-                </span>
-              }
-            />
-          )}
-          {countryZh && <Fact label="国家 / 地区" value={countryZh} />}
         </div>
       </Section>
 
