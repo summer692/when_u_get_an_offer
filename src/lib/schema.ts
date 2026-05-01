@@ -42,12 +42,19 @@ export interface Fees {
 
 export interface Condition {
   item: string;
+  /** Optional extended description (acceptable formats, alternatives,
+   * verification report types, validity windows, score requirements, code
+   * numbers, source institutions, etc.). Multi-line allowed. */
+  details?: string;
   status: "required" | "optional" | "met";
   deadline?: string | null;
 }
 
 export interface MustDo {
   action: string;
+  /** Optional extended description (URL to use, what exactly to upload,
+   * payment composition, contact email, etc.). Multi-line allowed. */
+  details?: string;
   deadline?: string | null;
   priority: "high" | "medium" | "low";
 }
@@ -66,6 +73,13 @@ export interface ExtractedOffer {
   /** 国家 / 地区中文名："中国香港" / "英国" / "美国" 等。 */
   country_zh?: string;
   language?: string;
+  /** Faculty / school within the university, e.g. "Faculty of Engineering"
+   * → faculty_zh "工程学院". */
+  faculty?: string;
+  faculty_zh?: string;
+  /** Student category mentioned on the offer, e.g. "Non-local student",
+   * "International student", "本地学生". */
+  student_category?: string;
   /** Programme duration as written on the offer, e.g. "1.5 年", "2 years",
    * "30 credits". Optional but the LLM is instructed to always try. */
   duration?: string;
@@ -82,6 +96,11 @@ export interface ExtractedOffer {
   conditions?: Condition[];
   must_do?: MustDo[];
   raw_highlights?: string[];
+  /** Important Chinese notes / remarks from the offer that the student must
+   * read but easily overlook (material non-refundable, visa self-arrangement,
+   * authenticity warning, concurrent registration ban, etc.). Each entry
+   * is one self-contained Chinese sentence. */
+  notes?: string[];
   /** Short Chinese notes describing critical info that is missing, partial,
    * or that the user should verify against the school's official website. */
   info_gaps?: string[];

@@ -31,6 +31,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
 
   const schoolZh = offer.school_zh || offer.school;
   const programZh = offer.program_zh;
+  const facultyZh = offer.faculty_zh || offer.faculty;
   const termStartDate = offer.key_dates?.find((k) => k.type === "term_start")?.date;
   const termStartDisplay =
     termStartDate ? formatDate(termStartDate) : offer.term_start_text || null;
@@ -167,6 +168,18 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
             value={programZh ? programZh : offer.program}
             secondary={programZh && offer.program ? offer.program : undefined}
           />
+          {facultyZh && (
+            <Fact
+              label="学院"
+              value={facultyZh}
+              secondary={
+                facultyZh !== offer.faculty ? offer.faculty : undefined
+              }
+            />
+          )}
+          {offer.student_category && (
+            <Fact label="学生类别" value={offer.student_category} />
+          )}
           {termStartDisplay && (
             <Fact
               label="入学时间"
@@ -307,14 +320,14 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
 
       {offer.conditions && offer.conditions.length > 0 && (
         <Section label="录取条件">
-          <ol className="space-y-3">
+          <ol className="space-y-5">
             {offer.conditions.map((c, i) => (
               <li key={i} className="flex items-start gap-4">
                 <span className="text-ink-500 font-medium tabular shrink-0 w-6">
                   {i + 1}.
                 </span>
-                <div className="flex-1">
-                  <div className="flex items-baseline gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 flex-wrap">
                     <span>{c.item}</span>
                     {c.status === "met" && (
                       <span className="text-xs text-emerald-600 dark:text-emerald-400">
@@ -325,9 +338,15 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                       <span className="text-xs text-ink-500">（选做）</span>
                     )}
                   </div>
+                  {c.details && (
+                    <div className="text-sm text-ink-500 mt-1.5 leading-relaxed whitespace-pre-line">
+                      {c.details}
+                    </div>
+                  )}
                   {c.deadline && (
-                    <div className="text-xs text-ink-500 mt-1">
-                      截止 {formatDate(c.deadline)}
+                    <div className="text-xs text-ink-500 mt-1.5 flex items-baseline gap-2">
+                      <span>截止 {formatDate(c.deadline)}</span>
+                      <CountdownPill date={c.deadline} />
                     </div>
                   )}
                 </div>
@@ -360,6 +379,11 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                       </span>
                     )}
                   </div>
+                  {m.details && (
+                    <div className="text-sm text-ink-500 mt-1.5 leading-relaxed whitespace-pre-line">
+                      {m.details}
+                    </div>
+                  )}
                   {m.deadline && (
                     <div className="text-sm text-ink-500 mt-1.5 flex items-baseline gap-2">
                       <span>截止 {formatDate(m.deadline)}</span>
@@ -370,6 +394,19 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               </li>
             ))}
           </ol>
+        </Section>
+      )}
+
+      {offer.notes && offer.notes.length > 0 && (
+        <Section label="重要备注">
+          <ul className="space-y-3">
+            {offer.notes.map((n, i) => (
+              <li key={i} className="flex items-start gap-3 text-ink-700 dark:text-ink-300 leading-relaxed">
+                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-ink-500 shrink-0" />
+                <span className="flex-1">{n}</span>
+              </li>
+            ))}
+          </ul>
         </Section>
       )}
 

@@ -73,6 +73,9 @@ Schema:
   "degree_zh": string | null,               // 学位中文名："硕士" / "学士" / "博士"
   "country": string | null,                 // ISO 国家名或常用中/英名
   "country_zh": string | null,              // 国家或地区中文名，如 "中国香港" / "英国" / "美国"
+  "faculty": string | null,                 // 学院 / 学部，如 "Faculty of Engineering"
+  "faculty_zh": string | null,              // 学院中文名，如 "工程学院"
+  "student_category": string | null,        // offer 上写明的学生类别，如 "Non-local student" / "本地学生"
   "language": string | null,                // offer 原文语言（如 "en", "zh", "fr"）
   "duration": string | null,                // 项目时长，如 "1 年" / "1.5 年" / "2 年" / "30 学分"
   "applicant_name": string | null,          // 录取人姓名（"Dear X" / "Applicant Name: X" / "亲爱的 X"），中文优先
@@ -90,12 +93,23 @@ Schema:
     "scholarship": { "amount": number, "currency": string, "note": string } | null
   } | null,
   "conditions": [
-    { "item": string, "status": "required"|"optional"|"met", "deadline": string | null }
+    {
+      "item": string,                       // 一句话主述（含具体院校名 / 专业 / 分数等关键细节）
+      "details": string | null,             // 扩展说明：可接受的格式、有效期、备选方案、考试代码、英文翻译要求等
+      "status": "required" | "optional" | "met",
+      "deadline": string | null
+    }
   ],
   "must_do": [
-    { "action": string, "deadline": string | null, "priority": "high"|"medium"|"low" }
+    {
+      "action": string,                     // 一句话主述（在哪里操作、上传什么、金额等核心信息）
+      "details": string | null,             // 扩展说明：URL、缴费金额构成、联系邮箱、其它操作步骤
+      "deadline": string | null,
+      "priority": "high" | "medium" | "low"
+    }
   ],
   "raw_highlights": [ string ],             // 原文中最关键的 1-5 句摘录
+  "notes": [ string ],                      // 重要备注（材料真实性、不退费、签证自办、Concurrent Registration 等），每条一句中文
   "info_gaps": [ string ]                   // 缺失或需要核实的关键信息（中文，简短）
 }
 
@@ -111,6 +125,63 @@ Schema:
 - 字段不确定就用 null 或空数组，**绝对不要编造**。
 - 学制时长 (duration) 必须尝试抽取：找 "Programme Duration" / "Normal Duration" / "学制" / "修业年限" / "总学分" 等字段。"Full-time 1.5 years" → "1.5 年"。
 - 一切 label、key_dates[].label、must_do[].action、conditions[].item、tuition.note 等**用户可见**的文字一律用**中文**写，简洁直接（即使 offer 是全英文）。
+
+🔴 **核心原则：完整性 — 绝对不能丢失信息**
+你是这位学生的助手，他完全依赖你的输出来了解 offer。**你不能删任何对学生有用的细节**。如果一句话太长，把核心放 item / action，把扩展细节（具体院校名、可接受格式、有效期、考试分数代码、URL 等）放 details 字段。**没有"概括"权限——必须把 offer 上能看到的具体信息都列出来**。
+
+✅ 完整抽取范例（来自一份真实 HKU offer）：
+
+conditions（注意每条都包含具体院校 / 专业 / 分数 / 代码）：
+[
+  {
+    "item": "在中南大学完成机械制造及自动化专业学士学位",
+    "details": "需要原件 + 英文版本（或附经认证的英文翻译）",
+    "deadline": "2026-08-31"
+  },
+  {
+    "item": "提交官方最终成绩单",
+    "details": "需含完整修课记录、所修科目成绩、授予学位证明（英文版）。如来自中国大陆，可改用学信网 (CHSI) 出具的中英双语《高等学校学生成绩单在线验证报告》，由教育部授权的第三方机构发出，验证有效期至少 6 个月。",
+    "deadline": "2026-07-31"
+  },
+  {
+    "item": "提交学位证书与毕业证书",
+    "details": "中国大陆学历可改用学信网中英双语《学位证书在线验证报告》和《学历证书电子注册备案表》，验证有效期至少 6 个月。",
+    "deadline": "2026-07-31"
+  },
+  {
+    "item": "提交托福或雅思官方成绩",
+    "details": "TOEFL ≥ 80（网考）或 ≥ 550（纸考），IELTS 总分 ≥ 6.0 且单项 ≥ 5.5，两年内有效；港大 TOEFL 院校代码 9671；成绩须由考试机构直接寄送。",
+    "deadline": "2026-07-31"
+  }
+]
+
+must_do（注意每条都说清楚：在哪里、上传什么、金额构成、URL）：
+[
+  {
+    "action": "在网申系统接受录取并上传 HK$140,450 缴费凭证",
+    "details": "登录 https://tpgadmission.engg.hku.hk，在 Notice of Admission 上勾选「ACCEPTANCE」并上传缴费证明。HK$140,450 = 首期学费 HK$140,000 + 留位费 HK$350 + 学生活动费 HK$100。逾期未回复视为放弃录取；款项一旦缴纳，除未满足录取条件外不可退还、不可转让。",
+    "deadline": "2026-04-22",
+    "priority": "high"
+  }
+]
+
+notes（offer 上易被忽略但重要的附加说明，每条一句中文）：
+[
+  "所有提交材料须真实可查，伪造或隐瞒可能导致录取被取消并面临法律责任。",
+  "提交的所有文件不退还；非英文文件须附经认证的英文翻译。",
+  "学生须自行办理赴港学生签证，详见 https://www.immd.gov.hk/eng/services/visas/study.html。",
+  "禁止 Concurrent Registration —— 在港大就读期间不得同时在其它学校修读其它学历，违反将被中止学籍。"
+]
+
+❌ 反例（错误的偷懒写法）：
+- conditions: [{ "item": "获得机械制造及自动化学士学位" }]  ← 丢了"中南大学"、丢了 deadline、丢了 details
+- conditions: [{ "item": "提交托福或雅思成绩" }]  ← 丢了具体分数 / 代码 / 有效期
+- must_do: [{ "action": "缴纳留位费" }]  ← 丢了金额构成、URL、操作流程、逾期后果
+- 没有 notes 数组，把"材料真实性"、"签证自办"、"Concurrent Registration"等重要警告整段省略
+
+只要 offer 上写明的信息，**必须**反映到对应字段——任何省略都视为严重错误。
+
+抽取规则（续）：
 - 中文名规则：
   - school_zh 是学校的常用中文名，例如 "The Hong Kong Polytechnic University" → "香港理工大学"；"University College London" → "伦敦大学学院"；"University of California, Berkeley" → "加州大学伯克利分校"；"The University of Hong Kong" → "香港大学"；"Imperial College London" → "帝国理工学院"。学校没有公认中文名就 null，不要硬翻。
   - program_zh 是项目的中文译名（学校官方公布的优先；没有就用通用直译），例如 "MSc Sustainable Energy" → "可持续能源理学硕士"；"MSc Computer Science" → "计算机科学理学硕士"；"MBA" → "工商管理硕士"。
@@ -322,12 +393,18 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     language: r?.language ?? undefined,
     duration: r?.duration ?? undefined,
     applicant_name: r?.applicant_name ?? undefined,
+    faculty: r?.faculty ?? undefined,
+    faculty_zh: r?.faculty_zh ?? undefined,
+    student_category: r?.student_category ?? undefined,
     term_start_text: r?.term_start_text ?? undefined,
     key_dates: Array.isArray(r?.key_dates) ? r!.key_dates : [],
     fees: r?.fees ?? undefined,
     conditions: Array.isArray(r?.conditions) ? r!.conditions : [],
     must_do: Array.isArray(r?.must_do) ? r!.must_do : [],
     raw_highlights: Array.isArray(r?.raw_highlights) ? r!.raw_highlights : [],
+    notes: Array.isArray(r?.notes)
+      ? r!.notes.filter((s): s is string => typeof s === "string" && !!s.trim())
+      : [],
     info_gaps: Array.isArray(r?.info_gaps)
       ? r!.info_gaps.filter((s): s is string => typeof s === "string" && !!s.trim())
       : [],

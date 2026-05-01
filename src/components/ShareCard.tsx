@@ -24,6 +24,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
 
   const schoolZh = offer.school_zh || offer.school;
   const programZh = offer.program_zh;
+  const facultyZh = offer.faculty_zh || offer.faculty;
   const countryZh = offer.country_zh || offer.country;
   const termStartDate = offer.key_dates?.find((k) => k.type === "term_start")?.date;
   const termStartDisplay =
@@ -136,6 +137,10 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         }}
       >
         <FactRow label="录取专业" value={programZh || offer.program} secondary={programZh ? offer.program : undefined} />
+        {facultyZh && <FactRow label="学院" value={facultyZh} />}
+        {offer.student_category && (
+          <FactRow label="学生类别" value={offer.student_category} />
+        )}
         {termStartDisplay && <FactRow label="入学时间" value={termStartDisplay} />}
         {offer.duration && <FactRow label="学习时长" value={offer.duration} />}
         {offer.fees?.tuition && (
@@ -175,7 +180,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
                   display: "flex",
                   alignItems: "baseline",
                   gap: 14,
-                  padding: "10px 0",
+                  padding: "14px 0",
                   borderBottom:
                     i === offer.conditions!.length - 1
                       ? "none"
@@ -194,9 +199,22 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
                 </span>
                 <div style={{ flex: 1, fontSize: 16, lineHeight: 1.5 }}>
                   {c.item}
+                  {c.details && (
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#3A3A3C",
+                        marginTop: 6,
+                        lineHeight: 1.55,
+                        whiteSpace: "pre-line",
+                      }}
+                    >
+                      {c.details}
+                    </div>
+                  )}
                   {c.deadline && (
                     <div
-                      style={{ fontSize: 13, color: "#86868B", marginTop: 4 }}
+                      style={{ fontSize: 13, color: "#86868B", marginTop: 6 }}
                     >
                       截止 {formatDate(c.deadline)}
                     </div>
@@ -218,7 +236,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
                   display: "flex",
                   alignItems: "baseline",
                   gap: 14,
-                  padding: "12px 0",
+                  padding: "14px 0",
                   borderBottom:
                     i === todos.length - 1 ? "none" : "1px solid #E8E2D5",
                 }}
@@ -244,9 +262,22 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
                   >
                     {m.action}
                   </div>
+                  {m.details && (
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "#3A3A3C",
+                        marginTop: 6,
+                        lineHeight: 1.55,
+                        whiteSpace: "pre-line",
+                      }}
+                    >
+                      {m.details}
+                    </div>
+                  )}
                   {m.deadline && (
                     <div
-                      style={{ fontSize: 13, color: "#86868B", marginTop: 4 }}
+                      style={{ fontSize: 13, color: "#86868B", marginTop: 6 }}
                     >
                       截止 {formatDate(m.deadline)}
                     </div>
@@ -255,6 +286,39 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
               </li>
             ))}
           </ol>
+        </Section>
+      )}
+
+      {offer.notes && offer.notes.length > 0 && (
+        <Section title="重要备注">
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {offer.notes.map((n, i) => (
+              <li
+                key={i}
+                style={{
+                  fontSize: 14,
+                  color: "#3A3A3C",
+                  lineHeight: 1.55,
+                  paddingLeft: 14,
+                  position: "relative",
+                  marginTop: i === 0 ? 0 : 8,
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 9,
+                    width: 5,
+                    height: 5,
+                    borderRadius: "50%",
+                    background: "#86868B",
+                  }}
+                />
+                {n}
+              </li>
+            ))}
+          </ul>
         </Section>
       )}
 
