@@ -500,7 +500,7 @@ function FeeBlock({
   const partial = money?.is_partial && !verified;
   const estimate = money?.is_estimate && !verified && !partial;
   const showApprox = estimate;
-  const verifyUrl = money?.source ?? buildVerifyUrl(school, program, title);
+  const isDeposit = title === "留位费";
 
   return (
     <div
@@ -525,15 +525,31 @@ function FeeBlock({
         <div className="mt-2 text-xs text-ink-500">{money.note}</div>
       )}
       {money && money.amount > 0 && (
-        <a
-          href={verifyUrl}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline"
-        >
-          {money.source ? `via ${hostOf(money.source)}` : "去官网核对"} ↗
-        </a>
+        money.source ? (
+          <a
+            href={money.source}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+          >
+            via {hostOf(money.source)} ↗
+          </a>
+        ) : isDeposit ? (
+          <div className="mt-3 text-xs text-ink-500">
+            请在 offer 中再次核对
+          </div>
+        ) : (
+          <a
+            href={buildVerifyUrl(school, program, title)}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+          >
+            去官网核对 ↗
+          </a>
+        )
       )}
     </div>
   );
