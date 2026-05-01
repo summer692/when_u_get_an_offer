@@ -94,6 +94,12 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           letterSpacing: 0,
           display: "flex",
           flexDirection: "column",
+          // Center the typography itself — without this the safe-margin
+          // padding pushes the natural-width text to the left edge of the
+          // 720 inner, and the export reads as "left-leaning" even at
+          // scale = 1. Lists override back to text-align:left per item
+          // because numbered rows look broken when centered.
+          textAlign: "center",
           transform: `scale(${scale})`,
           // Anchor the scale to top-center so an overflowing offer shrinks
           // symmetrically into the frame instead of clinging to the left edge.
@@ -300,6 +306,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
                   paddingLeft: 20,
                   position: "relative",
                   marginTop: i === 0 ? 0 : 10,
+                  textAlign: "left",
                 }}
               >
                 <span
@@ -483,6 +490,7 @@ function ListItem({
         gap: 18,
         padding: "10px 0",
         borderBottom: isLast ? "none" : `1px solid ${HAIRLINE}`,
+        textAlign: "left",
       }}
     >
       <span
