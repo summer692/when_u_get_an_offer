@@ -14,20 +14,16 @@ const W = 720;
 // offers grow another section or two instead of getting cut off at the bottom.
 const MIN_H = 1280; // 9:16 — IG-story aspect
 const PAD_X = 64;
-// How many items each list shows before collapsing to a "+N 更多" tail.
-// Tuned so a typical 5-condition + 3-todo + 2-note offer stays in a 9:16 frame.
-const MAX_CONDITIONS = 2;
-const MAX_TODOS = 2;
-const MAX_NOTES = 1;
 
-// Apple "graphite" stage — softer than pure black, less harsh on OLED, and
-// still gives every white character a near-keynote level of contrast.
-const BG = "#141416";
-const INK = "#F5F5F7";
-const SUB = "#A1A1A6";
-const MUTE = "#6E6E73";
-const HAIRLINE = "rgba(255, 255, 255, 0.10)";
-const HAIRLINE_STRONG = "rgba(255, 255, 255, 0.24)";
+// Editorial monochrome: white page, near-black ink. The shareable image is
+// meant to give the student a one-glance read of what their offer requires,
+// so we now show every condition / todo / note in full rather than truncating.
+const BG = "#FFFFFF";
+const INK = "#0A0A0A";
+const SUB = "#525252";
+const MUTE = "#86868B";
+const HAIRLINE = "#E5E5E7";
+const HAIRLINE_STRONG = "#0A0A0A";
 
 export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   { offer, agencyName, agencyLogo },
@@ -59,45 +55,15 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         backgroundColor: BG,
         color: INK,
         fontFamily: fontStack,
-        padding: `64px ${PAD_X}px 56px`,
+        padding: `56px ${PAD_X}px 48px`,
         boxSizing: "border-box",
         WebkitFontSmoothing: "antialiased",
         letterSpacing: 0,
         position: "relative",
-        // Clip the spotlight that pokes above the card, but the card itself
-        // grows downward as needed — content never gets cut.
-        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      {/* Stage spotlight — kept as a separate layer so html-to-image can't
-          alpha-blend it against an unintended fallback color. */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          top: -80,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 900,
-          height: 600,
-          backgroundImage:
-            "radial-gradient(ellipse at center, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 38%, rgba(0,0,0,0) 72%)",
-          pointerEvents: "none",
-          zIndex: 0,
-        }}
-      />
-      <div
-        style={{
-          position: "relative",
-          zIndex: 1,
-          display: "flex",
-          flexDirection: "column",
-          // At least fill the interior of a 1280 frame (padding 64 top + 56
-          // bottom), so footer's marginTop:auto pins it to the bottom on
-          // short offers. Grows past this on content-heavy offers.
-          minHeight: MIN_H - 64 - 56,
-        }}
-      >
       {/* Brand strip — country left, agency right, separated by hairline */}
       <div
         style={{
@@ -123,15 +89,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           <img
             src={agencyLogo}
             alt={agencyName || "agency"}
-            style={{
-              height: 26,
-              width: "auto",
-              objectFit: "contain",
-              // Most agency marks are dark-on-light; lift them to read on black
-              // without blowing out a logo that's already light.
-              filter: "brightness(0) invert(1)",
-              opacity: 0.92,
-            }}
+            style={{ height: 26, width: "auto", objectFit: "contain" }}
             crossOrigin="anonymous"
           />
         ) : agencyName ? (
@@ -151,7 +109,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       <div style={{ height: 1, background: HAIRLINE_STRONG }} />
 
       {/* Greeting */}
-      <div style={{ marginTop: 56, marginBottom: 28 }}>
+      <div style={{ marginTop: 40, marginBottom: 20 }}>
         <div
           style={{
             fontSize: 17,
@@ -182,7 +140,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       {schoolZh !== offer.school && (
         <div
           style={{
-            marginTop: 16,
+            marginTop: 12,
             fontSize: 13,
             color: MUTE,
             letterSpacing: "0.08em",
@@ -195,7 +153,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       )}
 
       {/* Programme as keynote subtitle */}
-      <div style={{ marginTop: 32 }}>
+      <div style={{ marginTop: 24 }}>
         <div
           style={{
             fontSize: 24,
@@ -224,9 +182,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       {/* Specs row — keynote spec sheet */}
       <div
         style={{
-          marginTop: 44,
-          paddingTop: 22,
-          paddingBottom: 22,
+          marginTop: 32,
+          paddingTop: 18,
+          paddingBottom: 18,
           borderTop: `1px solid ${HAIRLINE}`,
           borderBottom: `1px solid ${HAIRLINE}`,
           display: "grid",
@@ -245,8 +203,8 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       {/* Fees — big numbers */}
       <div
         style={{
-          marginTop: 22,
-          paddingBottom: 24,
+          marginTop: 18,
+          paddingBottom: 22,
           borderBottom: `1px solid ${HAIRLINE}`,
           display: "grid",
           gridTemplateColumns: "1fr 1fr 1fr",
@@ -258,90 +216,75 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         <Fee label="奖学金" money={offer.fees?.scholarship} />
       </div>
 
-      {offer.conditions && offer.conditions.length > 0 && (() => {
-        const visible = offer.conditions.slice(0, MAX_CONDITIONS);
-        const overflow = offer.conditions.length - visible.length;
-        return (
-          <Section title="录取条件">
-            <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {visible.map((c, i) => (
-                <ListItem
-                  key={i}
-                  index={i + 1}
-                  isLast={i === visible.length - 1 && overflow === 0}
-                  main={c.item}
-                  details={c.details ?? undefined}
-                  deadline={c.deadline ?? undefined}
-                />
-              ))}
-            </ol>
-            <MoreTail extra={overflow} />
-          </Section>
-        );
-      })()}
+      {offer.conditions && offer.conditions.length > 0 && (
+        <Section title="录取条件">
+          <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {offer.conditions.map((c, i) => (
+              <ListItem
+                key={i}
+                index={i + 1}
+                isLast={i === offer.conditions!.length - 1}
+                main={c.item}
+                details={c.details ?? undefined}
+                deadline={c.deadline ?? undefined}
+              />
+            ))}
+          </ol>
+        </Section>
+      )}
 
-      {todos.length > 0 && (() => {
-        const visible = todos.slice(0, MAX_TODOS);
-        const overflow = todos.length - visible.length;
-        return (
-          <Section title="接下来你要做的">
-            <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {visible.map((m, i) => (
-                <ListItem
-                  key={i}
-                  index={i + 1}
-                  isLast={i === visible.length - 1 && overflow === 0}
-                  main={m.action}
-                  details={m.details ?? undefined}
-                  deadline={m.deadline ?? undefined}
-                  emphasis={m.priority === "high"}
-                />
-              ))}
-            </ol>
-            <MoreTail extra={overflow} />
-          </Section>
-        );
-      })()}
+      {todos.length > 0 && (
+        <Section title="接下来你要做的">
+          <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {todos.map((m, i) => (
+              <ListItem
+                key={i}
+                index={i + 1}
+                isLast={i === todos.length - 1}
+                main={m.action}
+                details={m.details ?? undefined}
+                deadline={m.deadline ?? undefined}
+                emphasis={m.priority === "high"}
+              />
+            ))}
+          </ol>
+        </Section>
+      )}
 
-      {offer.notes && offer.notes.length > 0 && (() => {
-        const visible = offer.notes.slice(0, MAX_NOTES);
-        const overflow = offer.notes.length - visible.length;
-        return (
-          <Section title="重要备注">
-            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {visible.map((n, i) => (
-                <li
-                  key={i}
+      {offer.notes && offer.notes.length > 0 && (
+        <Section title="重要备注">
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {offer.notes.map((n, i) => (
+              <li
+                key={i}
+                style={{
+                  fontSize: 13,
+                  color: SUB,
+                  lineHeight: 1.65,
+                  paddingLeft: 18,
+                  position: "relative",
+                  marginTop: i === 0 ? 0 : 8,
+                }}
+              >
+                <span
                   style={{
-                    fontSize: 13,
-                    color: SUB,
-                    lineHeight: 1.65,
-                    paddingLeft: 18,
-                    position: "relative",
-                    marginTop: i === 0 ? 0 : 10,
+                    position: "absolute",
+                    left: 0,
+                    top: 9,
+                    width: 8,
+                    height: 1,
+                    background: SUB,
                   }}
-                >
-                  <span
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      top: 9,
-                      width: 8,
-                      height: 1,
-                      background: SUB,
-                    }}
-                  />
-                  {n}
-                </li>
-              ))}
-            </ul>
-            <MoreTail extra={overflow} />
-          </Section>
-        );
-      })()}
+                />
+                {n}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
-      {/* Footer — pinned to the bottom of the 9:16 frame regardless of how
-          much content sits above it (so short offers don't leave a void). */}
+      {/* Footer — pinned to the bottom on short offers via marginTop:auto;
+          flows naturally at the end of content on long offers. */}
       <div
         style={{
           marginTop: "auto",
@@ -361,7 +304,6 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           {agencyName ? `Curated by ${agencyName}` : "Curated by OfferLens"}
         </span>
         <span style={{ fontVariantNumeric: "tabular-nums" }}>{dateStamp}</span>
-      </div>
       </div>
     </div>
   );
@@ -454,7 +396,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section style={{ marginTop: 36 }}>
+    <section style={{ marginTop: 28 }}>
       <h2
         style={{
           fontSize: 11,
@@ -463,7 +405,7 @@ function Section({
           color: SUB,
           fontWeight: 500,
           marginTop: 0,
-          marginBottom: 16,
+          marginBottom: 12,
         }}
       >
         {title}
@@ -494,7 +436,7 @@ function ListItem({
         display: "flex",
         alignItems: "baseline",
         gap: 18,
-        padding: "12px 0",
+        padding: "10px 0",
         borderBottom: isLast ? "none" : `1px solid ${HAIRLINE}`,
       }}
     >
@@ -552,24 +494,6 @@ function ListItem({
         )}
       </div>
     </li>
-  );
-}
-
-function MoreTail({ extra }: { extra: number }) {
-  if (extra <= 0) return null;
-  return (
-    <div
-      style={{
-        marginTop: 14,
-        fontSize: 11,
-        letterSpacing: "0.28em",
-        textTransform: "uppercase",
-        color: MUTE,
-        fontWeight: 500,
-      }}
-    >
-      ＋ 还有 {extra} 项 · 完整内容见详情页
-    </div>
   );
 }
 
