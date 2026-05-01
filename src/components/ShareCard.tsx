@@ -11,11 +11,13 @@ interface Props {
 const W = 720;
 const PAD_X = 64;
 
-const INK = "#0A0A0A";
-const SUB = "#525252";
-const MUTE = "#9A9A9A";
-const RULE = "#ECECEC";
-const RULE_STRONG = "#0A0A0A";
+// Apple-keynote palette: near-black stage with off-white type.
+const BG = "#000000";
+const INK = "#F5F5F7";
+const SUB = "#A1A1A6";
+const MUTE = "#6E6E73";
+const HAIRLINE = "rgba(255, 255, 255, 0.08)";
+const HAIRLINE_STRONG = "rgba(255, 255, 255, 0.22)";
 
 export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   { offer, agencyName, agencyLogo },
@@ -43,7 +45,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       ref={ref}
       style={{
         width: W,
-        background: "#FFFFFF",
+        // Stage lighting: a soft elliptical spotlight fades into deep black,
+        // exactly like an Apple keynote title slide.
+        background: `radial-gradient(ellipse 760px 520px at 50% 22%, rgba(255,255,255,0.08), rgba(255,255,255,0.02) 38%, transparent 72%), ${BG}`,
         color: INK,
         fontFamily: fontStack,
         padding: `64px ${PAD_X}px 56px`,
@@ -65,9 +69,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         <div
           style={{
             fontSize: 11,
-            letterSpacing: "0.28em",
+            letterSpacing: "0.32em",
             textTransform: "uppercase",
-            color: INK,
+            color: SUB,
             fontWeight: 500,
           }}
         >
@@ -77,16 +81,24 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           <img
             src={agencyLogo}
             alt={agencyName || "agency"}
-            style={{ height: 26, width: "auto", objectFit: "contain" }}
+            style={{
+              height: 26,
+              width: "auto",
+              objectFit: "contain",
+              // Most agency marks are dark-on-light; lift them to read on black
+              // without blowing out a logo that's already light.
+              filter: "brightness(0) invert(1)",
+              opacity: 0.92,
+            }}
             crossOrigin="anonymous"
           />
         ) : agencyName ? (
           <div
             style={{
               fontSize: 11,
-              color: INK,
+              color: SUB,
               fontWeight: 500,
-              letterSpacing: "0.24em",
+              letterSpacing: "0.28em",
               textTransform: "uppercase",
             }}
           >
@@ -94,33 +106,30 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           </div>
         ) : null}
       </div>
-      <div style={{ height: 1, background: RULE_STRONG }} />
+      <div style={{ height: 1, background: HAIRLINE_STRONG }} />
 
       {/* Greeting */}
-      <div style={{ marginTop: 56, marginBottom: 56 }}>
+      <div style={{ marginTop: 72, marginBottom: 36 }}>
         <div
           style={{
             fontSize: 17,
-            color: INK,
-            fontWeight: 500,
+            color: SUB,
+            fontWeight: 400,
             letterSpacing: "-0.005em",
             lineHeight: 1.4,
           }}
         >
-          {offer.applicant_name ? `${offer.applicant_name}，` : ""}恭喜你获得录取。
-        </div>
-        <div style={{ marginTop: 6, fontSize: 13, color: MUTE }}>
-          以下是录取的详细信息
+          {offer.applicant_name ? `${offer.applicant_name}，` : ""}恭喜你获得录取
         </div>
       </div>
 
-      {/* Hero school name — keynote-large */}
+      {/* Hero school name — keynote title */}
       <h1
         style={{
-          fontSize: 76,
-          lineHeight: 0.95,
+          fontSize: 84,
+          lineHeight: 0.96,
           letterSpacing: "-0.045em",
-          fontWeight: 500,
+          fontWeight: 600,
           margin: 0,
           color: INK,
           wordBreak: "break-word",
@@ -131,24 +140,26 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       {schoolZh !== offer.school && (
         <div
           style={{
-            marginTop: 14,
-            fontSize: 14,
+            marginTop: 16,
+            fontSize: 13,
             color: MUTE,
-            letterSpacing: "0.01em",
+            letterSpacing: "0.08em",
+            fontWeight: 400,
+            textTransform: "uppercase",
           }}
         >
           {offer.school}
         </div>
       )}
 
-      {/* Programme as tagline */}
-      <div style={{ marginTop: 40 }}>
+      {/* Programme as keynote subtitle */}
+      <div style={{ marginTop: 44 }}>
         <div
           style={{
-            fontSize: 22,
+            fontSize: 24,
             color: INK,
             fontWeight: 500,
-            letterSpacing: "-0.015em",
+            letterSpacing: "-0.02em",
             lineHeight: 1.3,
           }}
         >
@@ -157,7 +168,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         {programZh && (
           <div
             style={{
-              marginTop: 6,
+              marginTop: 8,
               fontSize: 13,
               color: MUTE,
               letterSpacing: "0.01em",
@@ -168,14 +179,14 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         )}
       </div>
 
-      {/* Specs grid — keynote spec sheet feel */}
+      {/* Specs row — keynote spec sheet */}
       <div
         style={{
-          marginTop: 56,
+          marginTop: 64,
           paddingTop: 28,
           paddingBottom: 28,
-          borderTop: `1px solid ${RULE}`,
-          borderBottom: `1px solid ${RULE}`,
+          borderTop: `1px solid ${HAIRLINE}`,
+          borderBottom: `1px solid ${HAIRLINE}`,
           display: "grid",
           gridTemplateColumns: "1fr 1fr 1fr",
           gap: 24,
@@ -194,7 +205,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         style={{
           marginTop: 24,
           paddingBottom: 32,
-          borderBottom: `1px solid ${RULE}`,
+          borderBottom: `1px solid ${HAIRLINE}`,
           display: "grid",
           gridTemplateColumns: "1fr 1fr 1fr",
           gap: 24,
@@ -262,7 +273,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
                     top: 9,
                     width: 8,
                     height: 1,
-                    background: INK,
+                    background: SUB,
                   }}
                 />
                 {n}
@@ -275,15 +286,15 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       {/* Footer */}
       <div
         style={{
-          marginTop: 64,
+          marginTop: 72,
           paddingTop: 18,
-          borderTop: `1px solid ${RULE_STRONG}`,
+          borderTop: `1px solid ${HAIRLINE_STRONG}`,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           fontSize: 11,
-          color: INK,
-          letterSpacing: "0.24em",
+          color: SUB,
+          letterSpacing: "0.28em",
           textTransform: "uppercase",
           fontWeight: 500,
         }}
@@ -305,9 +316,9 @@ function Spec({ label, value }: { label: string; value: string }) {
           fontSize: 10,
           color: MUTE,
           textTransform: "uppercase",
-          letterSpacing: "0.24em",
+          letterSpacing: "0.28em",
           fontWeight: 500,
-          marginBottom: 8,
+          marginBottom: 10,
         }}
       >
         {label}
@@ -332,6 +343,7 @@ function Fee({ label, money }: { label: string; money?: Money | null }) {
   const value = formatMoney(money);
   const showApprox =
     money && money.is_estimate && !money.manually_edited && value !== "—";
+  const isEmpty = value === "—";
   return (
     <div>
       <div
@@ -339,9 +351,9 @@ function Fee({ label, money }: { label: string; money?: Money | null }) {
           fontSize: 10,
           color: MUTE,
           textTransform: "uppercase",
-          letterSpacing: "0.24em",
+          letterSpacing: "0.28em",
           fontWeight: 500,
-          marginBottom: 10,
+          marginBottom: 12,
         }}
       >
         {label}
@@ -349,12 +361,12 @@ function Fee({ label, money }: { label: string; money?: Money | null }) {
       </div>
       <div
         style={{
-          fontSize: 28,
-          color: INK,
+          fontSize: 30,
+          color: isEmpty ? MUTE : INK,
           fontWeight: 500,
-          letterSpacing: "-0.025em",
+          letterSpacing: "-0.03em",
           fontVariantNumeric: "tabular-nums",
-          lineHeight: 1.1,
+          lineHeight: 1.05,
         }}
       >
         {showApprox ? `≈ ${value}` : value}
@@ -362,7 +374,7 @@ function Fee({ label, money }: { label: string; money?: Money | null }) {
       {money?.note && (
         <div
           style={{
-            marginTop: 8,
+            marginTop: 10,
             fontSize: 11,
             color: MUTE,
             lineHeight: 1.5,
@@ -383,16 +395,16 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section style={{ marginTop: 56 }}>
+    <section style={{ marginTop: 64 }}>
       <h2
         style={{
           fontSize: 11,
-          letterSpacing: "0.28em",
+          letterSpacing: "0.32em",
           textTransform: "uppercase",
-          color: INK,
+          color: SUB,
           fontWeight: 500,
           marginTop: 0,
-          marginBottom: 20,
+          marginBottom: 22,
         }}
       >
         {title}
@@ -424,7 +436,7 @@ function ListItem({
         alignItems: "baseline",
         gap: 18,
         padding: "16px 0",
-        borderBottom: isLast ? "none" : `1px solid ${RULE}`,
+        borderBottom: isLast ? "none" : `1px solid ${HAIRLINE}`,
       }}
     >
       <span
@@ -471,7 +483,7 @@ function ListItem({
               fontSize: 11,
               color: MUTE,
               marginTop: 10,
-              letterSpacing: "0.18em",
+              letterSpacing: "0.22em",
               textTransform: "uppercase",
               fontWeight: 500,
             }}

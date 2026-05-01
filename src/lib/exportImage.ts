@@ -11,7 +11,7 @@ export async function exportNodeToImage(
   const dataUrl = await toPng(node, {
     pixelRatio: 2,
     cacheBust: true,
-    backgroundColor: "#F5F1EA",
+    backgroundColor: "#000000",
   });
 
   // Use Web Share API only on touch devices where the share sheet is the
