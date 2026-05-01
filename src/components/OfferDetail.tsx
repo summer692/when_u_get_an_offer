@@ -19,6 +19,12 @@ interface Props {
 
 export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const feesRef = useRef<HTMLDivElement>(null);
+
+  function scrollToFees() {
+    feesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   const [agency, setAgency] = useState<
     Pick<Settings, "agencyName" | "agencyLogo">
   >({});
@@ -259,31 +265,33 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         </div>
       </Section>
 
-      <Section label="费用">
-        <div className="grid md:grid-cols-3 gap-6">
-          <FeeBlock
-            title="学费"
-            money={offer.fees?.tuition}
-            school={schoolZh}
-            program={offer.program}
-            onEdit={() => setEditingFee("tuition")}
-          />
-          <FeeBlock
-            title="留位费"
-            money={offer.fees?.deposit}
-            school={schoolZh}
-            program={offer.program}
-            onEdit={() => setEditingFee("deposit")}
-          />
-          <FeeBlock
-            title="奖学金"
-            money={offer.fees?.scholarship}
-            school={schoolZh}
-            program={offer.program}
-            onEdit={() => setEditingFee("scholarship")}
-          />
-        </div>
-      </Section>
+      <div ref={feesRef} style={{ scrollMarginTop: 80 }}>
+        <Section label="费用">
+          <div className="grid md:grid-cols-3 gap-6">
+            <FeeBlock
+              title="学费"
+              money={offer.fees?.tuition}
+              school={schoolZh}
+              program={offer.program}
+              onEdit={() => setEditingFee("tuition")}
+            />
+            <FeeBlock
+              title="留位费"
+              money={offer.fees?.deposit}
+              school={schoolZh}
+              program={offer.program}
+              onEdit={() => setEditingFee("deposit")}
+            />
+            <FeeBlock
+              title="奖学金"
+              money={offer.fees?.scholarship}
+              school={schoolZh}
+              program={offer.program}
+              onEdit={() => setEditingFee("scholarship")}
+            />
+          </div>
+        </Section>
+      </div>
 
       {offer.info_gaps && offer.info_gaps.length > 0 && (
         <section className="mb-16 rounded-card border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/40 p-6">
@@ -306,9 +314,12 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
             >
               {researching ? "查询中…" : `重新查 ${schoolZh} 官网`}
             </button>
-            <span className="text-xs text-amber-700/80 dark:text-amber-300/80">
-              或点击费用卡片手动修正
-            </span>
+            <button
+              onClick={scrollToFees}
+              className="text-xs text-amber-800 dark:text-amber-200 underline underline-offset-4 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
+            >
+              或 点击卡片手动修正
+            </button>
           </div>
         </section>
       )}
