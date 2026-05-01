@@ -8,10 +8,10 @@ import { ProcessingOverlay } from "./components/ProcessingOverlay";
 import { useOffers } from "./hooks/useOffers";
 import { useTheme } from "./hooks/useTheme";
 import { parseFile, parseText, type ParsedInput } from "./lib/parsers";
-import { extractOffer } from "./lib/llm";
+import { applyResearch, extractOffer, researchOffer } from "./lib/llm";
 import { getSettings } from "./lib/db";
 import { uuid } from "./lib/format";
-import type { Offer } from "./lib/schema";
+import type { ExtractedOffer, Offer } from "./lib/schema";
 
 export default function App() {
   useTheme();
@@ -38,7 +38,27 @@ export default function App() {
         setError(null);
         const { apiKey, provider, model } = await ensureKey();
         setStage("正在读取 offer…");
-        const extracted = await extractOffer(input, { apiKey, provider, model });
+        let extracted: ExtractedOffer = await extractOffer(input, {
+          apiKey,
+          provider,
+          model,
+        });
+
+        const needsResearch =
+          (extracted.info_gaps?.length ?? 0) > 0 ||
+          extracted.fees?.tuition?.is_partial === true ||
+          !extracted.fees?.tuition;
+
+        if (needsResearch && provider === "google") {
+          setStage(`正在查 ${extracted.school} 官网补全…`);
+          try {
+            const research = await researchOffer(extracted, { apiKey });
+            if (research) extracted = applyResearch(extracted, research);
+          } catch (err) {
+            console.warn("research step failed, keeping initial extraction", err);
+          }
+        }
+
         setStage("保存中…");
         const now = Date.now();
         const offer: Offer = {

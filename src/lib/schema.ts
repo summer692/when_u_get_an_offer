@@ -21,6 +21,9 @@ export interface Money {
    * installment, per-credit billing, per-semester) and the user must look up
    * the full amount elsewhere. */
   is_partial?: boolean;
+  /** URL of the source page when this number was looked up from the school's
+   * official website rather than read directly off the offer. */
+  source?: string;
 }
 
 export interface Fees {

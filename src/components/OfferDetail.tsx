@@ -136,16 +136,19 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
             value={formatMoney(offer.fees?.tuition)}
             note={offer.fees?.tuition?.note}
             warn={offer.fees?.tuition?.is_partial ? "首期 / 不完整" : undefined}
+            source={offer.fees?.tuition?.source}
           />
           <FeeBlock
             title="留位费"
             value={formatMoney(offer.fees?.deposit)}
             note={offer.fees?.deposit?.note}
+            source={offer.fees?.deposit?.source}
           />
           <FeeBlock
             title="奖学金"
             value={formatMoney(offer.fees?.scholarship)}
             note={offer.fees?.scholarship?.note}
+            source={offer.fees?.scholarship?.source}
           />
         </div>
       </Section>
@@ -272,11 +275,13 @@ function FeeBlock({
   value,
   note,
   warn,
+  source,
 }: {
   title: string;
   value: string;
   note?: string;
   warn?: string;
+  source?: string;
 }) {
   return (
     <div className="card p-6">
@@ -292,8 +297,26 @@ function FeeBlock({
         {value}
       </div>
       {note && <div className="mt-2 text-xs text-ink-500">{note}</div>}
+      {source && (
+        <a
+          href={source}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+        >
+          via {hostOf(source)} ↗
+        </a>
+      )}
     </div>
   );
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
 }
 
 function Empty() {
