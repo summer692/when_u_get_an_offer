@@ -1,23 +1,27 @@
 import { openDB, type IDBPDatabase } from "idb";
-import type { Offer, Settings } from "./schema";
+import type { ExtractedOffer, Offer, Settings } from "./schema";
 
 const DB_NAME = "offerlens";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_OFFERS = "offers";
 const STORE_SETTINGS = "settings";
+const STORE_EXTRACTIONS = "extractions";
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
 function getDB() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion) {
         if (!db.objectStoreNames.contains(STORE_OFFERS)) {
           const store = db.createObjectStore(STORE_OFFERS, { keyPath: "id" });
           store.createIndex("by_created", "created_at");
         }
         if (!db.objectStoreNames.contains(STORE_SETTINGS)) {
           db.createObjectStore(STORE_SETTINGS);
+        }
+        if (oldVersion < 2 && !db.objectStoreNames.contains(STORE_EXTRACTIONS)) {
+          db.createObjectStore(STORE_EXTRACTIONS, { keyPath: "hash" });
         }
       },
     });
@@ -75,4 +79,46 @@ export async function setSetting<K extends keyof Settings>(
   } else {
     await db.put(STORE_SETTINGS, value, key);
   }
+}
+
+/**
+ * Content-hash cache for LLM extractions. Same input bytes → same hash →
+ * same cached output, so re-uploading the same offer file always returns
+ * an identical reading instead of a fresh "gacha pull" from the model.
+ */
+interface CachedExtraction {
+  hash: string;
+  extracted: ExtractedOffer;
+  model: string;
+  saved_at: number;
+}
+
+export async function getCachedExtraction(
+  hash: string,
+): Promise<ExtractedOffer | undefined> {
+  const db = await getDB();
+  const row: CachedExtraction | undefined = await db.get(
+    STORE_EXTRACTIONS,
+    hash,
+  );
+  return row?.extracted;
+}
+
+export async function saveCachedExtraction(
+  hash: string,
+  extracted: ExtractedOffer,
+  model: string,
+): Promise<void> {
+  const db = await getDB();
+  await db.put(STORE_EXTRACTIONS, {
+    hash,
+    extracted,
+    model,
+    saved_at: Date.now(),
+  } satisfies CachedExtraction);
+}
+
+export async function clearCachedExtraction(hash: string): Promise<void> {
+  const db = await getDB();
+  await db.delete(STORE_EXTRACTIONS, hash);
 }
