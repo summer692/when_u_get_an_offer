@@ -187,6 +187,37 @@ notes（offer 上易被忽略但重要的附加说明，每条一句中文）：
   - program_zh 是项目的中文译名（学校官方公布的优先；没有就用通用直译），例如 "MSc Sustainable Energy" → "可持续能源理学硕士"；"MSc Computer Science" → "计算机科学理学硕士"；"MBA" → "工商管理硕士"。
   - degree_zh: Master/MSc/MA → "硕士"；Bachelor/BSc/BA → "学士"；PhD/Doctor of Philosophy → "博士"；Master of Engineering → "工程硕士"。
   - country_zh: Hong Kong → "中国香港"；United Kingdom/UK → "英国"；United States/US → "美国"；Australia → "澳大利亚"；Singapore → "新加坡"；Mainland China → "中国大陆"。
+
+⚠️ 中国大学中文名查表（**必须用公认中文名，不要机械翻译**）：
+- Central South University → **中南大学**（不是"中央南大学"）
+- Tsinghua University → 清华大学
+- Peking University → 北京大学
+- Fudan University → 复旦大学
+- Shanghai Jiao Tong University → 上海交通大学
+- Zhejiang University → 浙江大学
+- Renmin University of China → 中国人民大学
+- Sun Yat-sen University → 中山大学
+- Beijing Normal University → 北京师范大学
+- Wuhan University → 武汉大学
+- Nanjing University → 南京大学
+- Xi'an Jiaotong University → 西安交通大学
+- Harbin Institute of Technology → 哈尔滨工业大学
+- The University of Hong Kong / HKU → 香港大学
+- The Chinese University of Hong Kong / CUHK → 香港中文大学
+- The Hong Kong University of Science and Technology / HKUST → 香港科技大学
+- The Hong Kong Polytechnic University / PolyU → 香港理工大学
+- City University of Hong Kong / CityU → 香港城市大学
+- Hong Kong Baptist University / HKBU → 香港浸会大学
+- The Education University of Hong Kong / EdUHK → 香港教育大学
+- Lingnan University → 岭南大学
+- 不在上表里的中国大学，要先想这个学校的**官方中文名**再写；想不出来就用 null（在 conditions / details 里也保留 null 或写英文原名），**绝不**机械直译。
+
+英文 → 中文翻译陷阱（不要按字面翻译）：
+英文 → 中文翻译陷阱（不要按字面翻译）：
+- 提到外国学校或机构名时，先用其公认中文名，没有就保留英文。
+- 不要把 "X College" 永远翻成 "X 学院"；很多 College 实际叫 "学院" 或 "大学"。Imperial College London → 帝国理工学院。
+- "School of X" 在大学语境是"X 学院"或"学系"。
+
 - **英文规范化**：如果 offer 把学校或专业名写成全大写（如 "THE HONG KONG POLYTECHNIC UNIVERSITY" / "MSC SUSTAINABLE ENERGY"），抽取到 school / program 字段时**必须规范化为 Title Case**："The Hong Kong Polytechnic University" / "MSc Sustainable Energy"。常见缩写保持原样大写：MSc, MA, MBA, PhD, BSc, BA, MEng, MFA, LLM, MPhil, USA, UK, HK, MIT, NUS。
 
 申请人姓名 (applicant_name)：
@@ -274,6 +305,12 @@ fees.deposit 的语义（沿用之前规则）：
 - 例子：PolyU offer 的 Debit Note 1 写 "Caution Money 400 + Tuition fee 102,000 = Total 102,400, Payment Deadline 19-Mar-2026"，则 fees.deposit = { amount: 102400, currency: "HKD", note: "Caution Money 400 + 首期学费 102,000" }，并在 key_dates 中加 deposit_deadline=2026-03-19，在 must_do 中加高优先级"在 2026-03-19 前缴纳 HK$102,400 以确认录取"。
 - 如果 offer 只有一个独立的 "refundable deposit" 数字（不含首期学费），那 fees.deposit 就是这个独立数字。
 
+⚠️ **留位费不退还的提醒（极易遗漏，必须保留）**：
+- 几乎所有 offer 都会写一句类似 "Fees once paid are non-refundable and non-transferable" / "已缴款项概不退还" / "deposit will not be refunded except for failure to fulfil conditions" —— 这种警告**必须**反映在两处之一：
+  (a) fees.deposit.note 里加上 "已缴款项不退还"
+  (b) notes[] 里加一条 "已缴留位费一律不退还也不可转让，除非未能满足录取条件"
+- 学生第一次看 offer 时会以为留位费可以退（因为字面上是"押金"），所以这条警告**绝对不能省略**。即使 offer 只是简短一笔带过，也要忠实保留。
+
 （学费计算规则见上方"学费计算"段；新版本不再做自动相乘，未明确列出总学费时直接 tuition=null + info_gaps + 等研究步骤）
 
 学费仍然不完整时（is_partial = true）：
@@ -292,7 +329,42 @@ info_gaps（生成前必须做自检）：
 key_dates 与 must_do：
 - 留位费截止 → key_dates 加一条 type="deposit_deadline"；同时 must_do 加一条 priority="high"，action 写明金额（如有），如 "缴纳留位费 HK$102,400 以确认录取"。
 - must_do 是"用户要做的动作"，不是信息描述。
-- 日期归一到 YYYY-MM-DD。"within 2 weeks" 这类无法解析就 null。`;
+- 日期归一到 YYYY-MM-DD。"within 2 weeks" 这类无法解析就 null。
+
+🚨🚨🚨 输出 JSON **之前**必须逐项确认（自检清单） 🚨🚨🚨
+逐条对照下方清单。**任何一项遗漏 offer 上明明写着的内容都属于严重错误**。
+
+☐ 1. school_zh 用的是该校**公认中文名**，不是机械字面翻译。
+     - "Central South University" → "中南大学" ✅，**不是** "中央南大学" ❌
+     - 不在中文名查表里、且想不出公认中文名时 —— **保留 null，不要硬翻**。
+
+☐ 2. applicant_name 已抽（中文优先；"Mr. Wang Chenchen" → "Wang Chenchen"）。
+
+☐ 3. faculty_zh 已抽（如 Faculty of Engineering → "工程学院"）。
+
+☐ 4. student_category 已抽（Non-local student / 本地学生 等，offer 上有就一定要填）。
+
+☐ 5. **每条 condition 的 details 字段已填完整**：
+     - 如果 offer 同段落给了**学历认证 / 验证报告**的具体规格 → 必须把"学信网中英双语《学位证书在线验证报告》/《学历证书电子注册备案表》/《高等学校学生成绩单在线验证报告》、6 个月有效期、由教育部授权机构出具"等细节**逐字逐项**写进 details，不能简化为"附英文翻译"或"做认证"。
+     - 如果 offer 给了**语言成绩具体分数**（TOEFL ≥ 80 iBT / IELTS ≥ 6.0 单项 ≥ 5.5、考试代码 9671、两年内有效、由考试机构直送）→ 必须**全部**写进对应 condition.details。
+     - 写 "提交语言成绩" 而不写具体分数 = 错误。
+
+☐ 6. **每条 must_do 的 details 字段已填完整**：
+     - 如果 offer 给了上传 / 缴费的 URL → 写进 details。
+     - 如果首期付款是 "HK$X = 首期学费 + 留位费 + 学生活动费" 这种合计 → details 里写明金额构成。
+     - 如果 offer 写了"逾期视为放弃录取" / "款项不退" → 必须写进 details 或 notes[]。
+
+☐ 7. **notes[] 数组已抽**：扫一遍 offer 的 "Notes on..." / "Important Notes" / "Authenticity" / "Visa Arrangement" / "Concurrent Registration" / "Refund Policy" / "Caution Money is non-refundable" 等所有附加说明段落 —— **每条**都要单独成为一条 note，不能合并、不能省略。
+
+☐ 8. **留位费不退还的提醒**：fees.deposit.note 或 notes[] 至少有一处说"已缴款项不退还也不可转让，除非未能满足录取条件"（前提是 offer 上确实写了类似的话；如果 offer 没写就不要编造）。
+
+☐ 9. 学费抽取符合优先级（offer 明示 total → 直接用，分期不影响）。
+
+☐ 10. 每个具体日期都已落到某个 deadline / date 字段，没有日期被丢弃。
+
+☐ 11. action / item 文本里**没有**填充语 ("在指定时间内" / "按规定时间" / "by the prescribed time")。
+
+如果以上任何一项你只做了一半（例如填了 conditions 但没填 details，或抽了部分 notes 但漏了"不退款"和"Concurrent Registration"），那就回去补全再输出。`;
 
 export interface ExtractOptions {
   apiKey: string;
