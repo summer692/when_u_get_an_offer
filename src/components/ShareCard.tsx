@@ -14,7 +14,7 @@ const W = 720;
 // (font, padding, line-height all together) so the whole offer still fits
 // without clipping, just at a tighter density.
 const H = 1280;
-const PAD_X = 64;
+const PAD_X = 40;
 const PAD_T = 56;
 const PAD_B = 48;
 // Floor on auto-shrink. Below ~0.6 body text drops under 10pt and stops
