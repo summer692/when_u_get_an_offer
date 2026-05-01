@@ -71,8 +71,25 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
         <p className="mt-4 text-xl md:text-2xl text-ink-500">
           {offer.program}
           {offer.degree && <span className="ml-3">· {offer.degree}</span>}
+          {offer.duration && <span className="ml-3">· {offer.duration}</span>}
         </p>
       </header>
+
+      {offer.info_gaps && offer.info_gaps.length > 0 && (
+        <section className="mb-12 rounded-card border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/40 p-6">
+          <div className="text-xs uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300 font-medium mb-3">
+            需要核实
+          </div>
+          <ul className="space-y-2 text-amber-900 dark:text-amber-100">
+            {offer.info_gaps.map((g, i) => (
+              <li key={i} className="flex items-start gap-3">
+                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                <span>{g}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <Section label="关键日期">
         {offer.key_dates?.length ? (
@@ -114,8 +131,17 @@ export function OfferDetail({ offer, onBack, onDelete }: Props) {
 
       <Section label="费用">
         <div className="grid md:grid-cols-3 gap-6">
-          <FeeBlock title="学费" value={formatMoney(offer.fees?.tuition)} />
-          <FeeBlock title="留位费" value={formatMoney(offer.fees?.deposit)} />
+          <FeeBlock
+            title="学费"
+            value={formatMoney(offer.fees?.tuition)}
+            note={offer.fees?.tuition?.note}
+            warn={offer.fees?.tuition?.is_partial ? "首期 / 不完整" : undefined}
+          />
+          <FeeBlock
+            title="留位费"
+            value={formatMoney(offer.fees?.deposit)}
+            note={offer.fees?.deposit?.note}
+          />
           <FeeBlock
             title="奖学金"
             value={formatMoney(offer.fees?.scholarship)}
@@ -245,14 +271,23 @@ function FeeBlock({
   title,
   value,
   note,
+  warn,
 }: {
   title: string;
   value: string;
   note?: string;
+  warn?: string;
 }) {
   return (
     <div className="card p-6">
-      <div className="text-sm text-ink-500">{title}</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm text-ink-500">{title}</div>
+        {warn && (
+          <div className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+            {warn}
+          </div>
+        )}
+      </div>
       <div className="mt-2 text-2xl font-display font-semibold tabular">
         {value}
       </div>

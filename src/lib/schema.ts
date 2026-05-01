@@ -17,6 +17,10 @@ export interface Money {
   currency: string;
   period?: "year" | "term" | "total";
   note?: string;
+  /** True if this figure is only a portion of the real total (e.g. first
+   * installment, per-credit billing, per-semester) and the user must look up
+   * the full amount elsewhere. */
+  is_partial?: boolean;
 }
 
 export interface Fees {
@@ -44,11 +48,17 @@ export interface ExtractedOffer {
   degree?: string;
   country?: string;
   language?: string;
+  /** Programme duration as written on the offer, e.g. "1.5 年", "2 years",
+   * "30 credits". Optional but the LLM is instructed to always try. */
+  duration?: string;
   key_dates: KeyDate[];
   fees?: Fees;
   conditions?: Condition[];
   must_do?: MustDo[];
   raw_highlights?: string[];
+  /** Short Chinese notes describing critical info that is missing, partial,
+   * or that the user should verify against the school's official website. */
+  info_gaps?: string[];
 }
 
 export interface Offer extends ExtractedOffer {

@@ -13,28 +13,28 @@ export const PROVIDERS: Record<Provider, ProviderConfig> = {
   google: {
     endpoint:
       "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-    defaultModel: "gemini-2.5-flash-lite",
+    defaultModel: "gemini-2.5-flash",
     models: [
-      {
-        id: "gemini-2.5-flash-lite",
-        label: "Gemini 2.5 Flash-Lite",
-        note: "免费层 / 最便宜",
-      },
       {
         id: "gemini-2.5-flash",
         label: "Gemini 2.5 Flash",
-        note: "更高质量",
+        note: "推荐 · 免费层够用",
+      },
+      {
+        id: "gemini-2.5-flash-lite",
+        label: "Gemini 2.5 Flash-Lite",
+        note: "最便宜 / 偶尔抽错",
       },
       {
         id: "gemini-2.5-pro",
         label: "Gemini 2.5 Pro",
-        note: "高难度 offer",
+        note: "复杂 offer / 多页",
       },
     ],
   },
   openrouter: {
     endpoint: "https://openrouter.ai/api/v1/chat/completions",
-    defaultModel: "google/gemini-2.5-flash-lite",
+    defaultModel: "google/gemini-2.5-flash",
     extraHeaders: () => ({
       "HTTP-Referer": window.location.origin,
       "X-Title": "OfferLens",
@@ -70,6 +70,7 @@ Schema:
   "degree": string | null,                  // 例如 "Master", "Bachelor", "PhD"
   "country": string | null,                 // ISO 国家名或常用中/英名
   "language": string | null,                // offer 原文语言（如 "en", "zh", "fr"）
+  "duration": string | null,                // 项目时长，如 "1 年" / "1.5 年" / "2 年" / "30 学分"
   "key_dates": [
     {
       "type": "accept_deadline" | "deposit_deadline" | "term_start" | "tuition_deadline" | "document_deadline" | "other",
@@ -78,8 +79,8 @@ Schema:
     }
   ],
   "fees": {
-    "tuition":     { "amount": number, "currency": string, "period": "year"|"term"|"total" } | null,
-    "deposit":     { "amount": number, "currency": string } | null,
+    "tuition":     { "amount": number, "currency": string, "period": "year"|"term"|"total", "note": string|null, "is_partial": boolean } | null,
+    "deposit":     { "amount": number, "currency": string, "note": string|null } | null,
     "scholarship": { "amount": number, "currency": string, "note": string } | null
   } | null,
   "conditions": [
@@ -88,15 +89,35 @@ Schema:
   "must_do": [
     { "action": string, "deadline": string | null, "priority": "high"|"medium"|"low" }
   ],
-  "raw_highlights": [ string ]              // 原文中最关键的 1-5 句摘录
+  "raw_highlights": [ string ],             // 原文中最关键的 1-5 句摘录
+  "info_gaps": [ string ]                   // 缺失或需要核实的关键信息（中文，简短）
 }
 
-规则：
-- 字段不确定就用 null 或空数组，不要编造。
-- "留位费 / deposit / seat fee / enrolment deposit" 映射到 deposit_deadline，并加入 must_do 高优先级。
-- 日期必须归一到 YYYY-MM-DD。如果原文只说"within 2 weeks"之类，解析不出具体日期就返回 null。
-- must_do 是 "用户必须做的动作"（如 "缴纳留位费 $1000"、"提交 IELTS 成绩"），不是信息性陈述。
-- 一切中文 label，保持简洁。`;
+抽取规则：
+- 字段不确定就用 null 或空数组，**绝对不要编造**。
+- 学制时长 (duration) 必须尝试抽取：找 "Programme Duration" / "Normal Duration" / "学制" / "修业年限" / "总学分" 等字段。"Full-time 1.5 years" → "1.5 年"。
+- 一切 label 用中文，简洁。
+
+学费 vs 留位费（重要，常见错误源）：
+- "Caution Money" / "留位费" / "Acceptance Deposit" / "Enrolment Deposit" / "Seat Deposit" 一律放 fees.deposit，**不要**当成 tuition。
+- 真正的学费 (tuition) 是项目本身的教学费，常见关键词："Tuition Fee" / "Programme Fee" / "学费" / "Course Fee"。
+- **如果 offer 上的学费数字只是"首期付款 / per-credit 计费 / 单学期金额 / 一部分学分对应的金额"** —— 例如香港多数 PolyU/HKU/CUHK offer 只列出按学分计的首期 debit note —— 必须：
+  (1) 仍把它放到 tuition；
+  (2) **将 tuition.is_partial 设为 true**；
+  (3) 在 tuition.note 里用中文清楚解释，例如 "首期 12 学分 × HK$8,500，全程总学费需查官网"；
+  (4) 在 info_gaps 加一条："学费仅显示首期，请到 [学校] 官网查询全程总学费"。
+
+info_gaps 触发条件（任意命中就加一条简短中文说明）：
+- 没找到 tuition 数字；
+- 找到的 tuition.is_partial 为 true；
+- 没找到 duration（学制时长）；
+- 没找到 term_start（开学时间）；
+- 没找到 deposit_deadline 但 offer 提到 caution / deposit。
+
+key_dates 与 must_do：
+- 留位费截止 → key_dates 加一条 type="deposit_deadline"；同时 must_do 加一条 priority="high"，action 写明金额（如有），如 "缴纳留位费 HK$102,400 以确认录取"。
+- must_do 是"用户要做的动作"，不是信息描述。
+- 日期归一到 YYYY-MM-DD。"within 2 weeks" 这类无法解析就 null。`;
 
 export interface ExtractOptions {
   apiKey: string;
@@ -191,10 +212,14 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     degree: r?.degree ?? undefined,
     country: r?.country ?? undefined,
     language: r?.language ?? undefined,
+    duration: r?.duration ?? undefined,
     key_dates: Array.isArray(r?.key_dates) ? r!.key_dates : [],
     fees: r?.fees ?? undefined,
     conditions: Array.isArray(r?.conditions) ? r!.conditions : [],
     must_do: Array.isArray(r?.must_do) ? r!.must_do : [],
     raw_highlights: Array.isArray(r?.raw_highlights) ? r!.raw_highlights : [],
+    info_gaps: Array.isArray(r?.info_gaps)
+      ? r!.info_gaps.filter((s): s is string => typeof s === "string" && !!s.trim())
+      : [],
   };
 }

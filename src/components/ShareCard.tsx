@@ -104,6 +104,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         >
           {offer.program}
           {offer.degree ? `  ·  ${offer.degree}` : ""}
+          {offer.duration ? `  ·  ${offer.duration}` : ""}
         </p>
       </div>
 
@@ -182,8 +183,11 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         <Section title="费用">
           {offer.fees?.tuition && (
             <Row
-              label="学费"
+              label={
+                offer.fees.tuition.is_partial ? "学费（首期）" : "学费"
+              }
               value={formatMoney(offer.fees.tuition)}
+              trailing={offer.fees.tuition.note}
               isLast={!offer.fees?.deposit && !offer.fees?.scholarship}
             />
           )}
@@ -191,6 +195,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
             <Row
               label="留位费"
               value={formatMoney(offer.fees.deposit)}
+              trailing={offer.fees.deposit.note}
               isLast={!offer.fees?.scholarship}
             />
           )}
@@ -203,6 +208,59 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
             />
           )}
         </Section>
+      )}
+
+      {offer.info_gaps && offer.info_gaps.length > 0 && (
+        <div
+          style={{
+            background: "#FEF3C7",
+            border: "1px solid #FCD34D",
+            borderRadius: 14,
+            padding: "16px 20px",
+            marginBottom: 36,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "#92400E",
+              fontWeight: 600,
+              marginBottom: 8,
+            }}
+          >
+            需要核实
+          </div>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {offer.info_gaps.map((g, i) => (
+              <li
+                key={i}
+                style={{
+                  fontSize: 14,
+                  color: "#78350F",
+                  lineHeight: 1.5,
+                  paddingLeft: 14,
+                  position: "relative",
+                  marginTop: i === 0 ? 0 : 6,
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 8,
+                    width: 5,
+                    height: 5,
+                    borderRadius: "50%",
+                    background: "#D97706",
+                  }}
+                />
+                {g}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* Must do (top 4) */}
