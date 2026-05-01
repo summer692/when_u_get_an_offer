@@ -109,7 +109,7 @@ fees.deposit 的语义（重要）：
 - 如果 offer 只有一个独立的 "refundable deposit" 数字（不含首期学费），那 fees.deposit 就是这个独立数字。
 
 学费计算（优先尝试，但要标为估算）：
-- **如果 offer 同时给出了"项目总学分"（如 "Programme Credit Requirements: 31.0"、"30 credits in total"、"修读 30 学分"）和"按学分单价"（如 "HK$8,500/credit"），请你自己用乘法算出全程总学费，并填到 tuition：**
+- **如果 offer 同时给出了"项目总学分"（如 "Programme Credit Requirements: 31.0"、"30 credits in total"、"修读 30 学分"）和"按学分单价"（如 "HK$13,600/credit"），请你自己用乘法算出全程总学费，并填到 tuition：**
   amount = 总学分 × 单价
   period = "total"
   is_partial = false
@@ -118,6 +118,14 @@ fees.deposit 的语义（重要）：
 - 同理：如果 offer 给出"按年学费 + 学制年数"，也可以直接相乘得到 total，同样设 is_estimate = true。
 - **必须真的相乘得出一个具体的整数**，不要只写公式不写数字。
 - 只有 offer 上**直接写明了**项目总学费数字（不是按学分/按年推算的），才能 is_estimate = false。
+
+⚠️ 关键：判断 per-credit 单价是否可靠（避免把首期账单单价当作官方学费）：
+- 如果"按学分单价"出现在 **"Debit Note" / "首期账单" / "Initial Bill" / "this debit note" 的注释 / Note on Tuition Fee** 里 —— 这个单价**很可能只是首期账单临时使用的折算值**（例如 PolyU 把第一学期 12 学分按 HK$8,500 计算），并不是该项目官方公布的标准单价。
+- 在这种情况下**不要**自动相乘当 total，应当：
+  (1) 把这个 per-credit × first-installment-credits 的数字放到 fees.deposit 或者 must_do 里说明；
+  (2) tuition 设为 null 或保留首期金额并设 is_partial = true；
+  (3) 在 info_gaps 加一条"offer 仅给出首期账单单价，项目总学费需查官网"，让后续研究步骤去官网取真实费率。
+- 只有当单价出现在 **项目费用总览 / Programme Fee / Tuition Fee 段落（不是 debit note 注释）** 时才安全地相乘得 total。
 
 学费仍然不完整时（is_partial = true）：
 - 只有在 offer 上的学费数字是"首期 / 单学期 / 单学分 / 一部分付款"，并且**也无法从 offer 自身算出总额**时，才把它放到 tuition 并设 is_partial = true。

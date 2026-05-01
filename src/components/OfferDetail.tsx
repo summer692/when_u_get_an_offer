@@ -6,7 +6,7 @@ import { getSettings } from "../lib/db";
 import { exportNodeToImage, safeFilename } from "../lib/exportImage";
 import { ShareCard } from "./ShareCard";
 import { MoneyEditor } from "./MoneyEditor";
-import { pruneInfoGaps } from "../lib/llm";
+import { applyResearch, pruneInfoGaps, researchOffer } from "../lib/llm";
 
 type FeeKey = "tuition" | "deposit" | "scholarship";
 
@@ -27,6 +27,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   const [editingFee, setEditingFee] = useState<FeeKey | null>(null);
   const [editingDuration, setEditingDuration] = useState(false);
   const [durationDraft, setDurationDraft] = useState(offer.duration ?? "");
+  const [researching, setResearching] = useState(false);
 
   useEffect(() => {
     getSettings().then((s) =>
@@ -68,6 +69,44 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     setEditingFee(null);
     setToast("已保存");
     setTimeout(() => setToast(null), 1800);
+  }
+
+  async function rerunResearch() {
+    if (researching) return;
+    setResearching(true);
+    try {
+      const settings = await getSettings();
+      if (!settings.apiKey) {
+        setToast("请先在设置中填入 API Key");
+        return;
+      }
+      if ((settings.provider ?? "google") !== "google") {
+        setToast("仅 Google AI Studio 支持官网查询");
+        return;
+      }
+      setToast(`正在查 ${offer.school} 官网…`);
+      const research = await researchOffer(offer, { apiKey: settings.apiKey });
+      if (!research) {
+        setToast("没有从官网查到新内容");
+        return;
+      }
+      const merged = applyResearch(offer, research);
+      await onUpdate(merged);
+      const got = [
+        research.tuition && "学费",
+        research.duration && "学制",
+        research.scholarship && "奖学金",
+      ]
+        .filter(Boolean)
+        .join("、");
+      setToast(got ? `已从官网补全：${got}` : "没有从官网查到新内容");
+    } catch (err) {
+      console.error(err);
+      setToast("查询失败，请稍后再试");
+    } finally {
+      setResearching(false);
+      setTimeout(() => setToast(null), 3000);
+    }
   }
 
   async function saveDuration() {
@@ -172,11 +211,34 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               </li>
             ))}
           </ul>
-          <p className="mt-3 text-xs text-amber-700/80 dark:text-amber-300/80">
-            点击下方任意费用卡片可手动修正。
-          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              onClick={rerunResearch}
+              disabled={researching}
+              className="text-xs px-3 py-1.5 rounded-full bg-amber-200/70 dark:bg-amber-800/40 text-amber-900 dark:text-amber-100 hover:bg-amber-300/70 dark:hover:bg-amber-800/60 transition-colors disabled:opacity-60"
+            >
+              {researching ? "查询中…" : `重新查 ${offer.school} 官网`}
+            </button>
+            <span className="text-xs text-amber-700/80 dark:text-amber-300/80">
+              或点击下方任意费用卡片手动修正
+            </span>
+          </div>
         </section>
       )}
+
+      {(offer.fees?.tuition?.is_estimate ||
+        offer.fees?.tuition?.is_partial) &&
+        !offer.info_gaps?.length && (
+          <div className="mb-12 -mt-4">
+            <button
+              onClick={rerunResearch}
+              disabled={researching}
+              className="text-xs px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors disabled:opacity-60"
+            >
+              {researching ? "查询中…" : `重新查 ${offer.school} 官网补全学费`}
+            </button>
+          </div>
+        )}
 
       <Section label="关键日期">
         {offer.key_dates?.length ? (

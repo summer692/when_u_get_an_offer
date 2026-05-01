@@ -47,6 +47,7 @@ export default function App() {
         const needsResearch =
           (extracted.info_gaps?.length ?? 0) > 0 ||
           extracted.fees?.tuition?.is_partial === true ||
+          extracted.fees?.tuition?.is_estimate === true ||
           !extracted.fees?.tuition;
 
         if (needsResearch && provider === "google") {
