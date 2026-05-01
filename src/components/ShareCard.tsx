@@ -9,12 +9,12 @@ interface Props {
 }
 
 const W = 720;
-const PAD_X = 56;
+const PAD_X = 64;
 
 const INK = "#0A0A0A";
 const SUB = "#525252";
-const MUTE = "#A3A3A3";
-const RULE = "#E5E5E5";
+const MUTE = "#9A9A9A";
+const RULE = "#ECECEC";
 const RULE_STRONG = "#0A0A0A";
 
 export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
@@ -22,7 +22,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   ref,
 ) {
   const today = new Date();
-  const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(
+  const dateStamp = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(
     today.getDate(),
   )}`;
 
@@ -46,45 +46,38 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         background: "#FFFFFF",
         color: INK,
         fontFamily: fontStack,
-        padding: `48px ${PAD_X}px 40px`,
+        padding: `64px ${PAD_X}px 56px`,
         boxSizing: "border-box",
         WebkitFontSmoothing: "antialiased",
+        letterSpacing: 0,
       }}
     >
-      {/* Top hairline */}
-      <div style={{ height: 1, background: RULE_STRONG, marginBottom: 28 }} />
-
-      {/* Brand strip */}
+      {/* Brand strip — country left, agency right, separated by hairline */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          marginBottom: 56,
+          marginBottom: 18,
           minHeight: 28,
         }}
       >
         <div
           style={{
             fontSize: 11,
-            letterSpacing: "0.24em",
+            letterSpacing: "0.28em",
             textTransform: "uppercase",
             color: INK,
             fontWeight: 500,
           }}
         >
-          {(countryZh || "Offer").toString()} · Offer
+          {(countryZh || "Overseas").toString()} · Offer
         </div>
         {agencyLogo ? (
           <img
             src={agencyLogo}
             alt={agencyName || "agency"}
-            style={{
-              height: 28,
-              width: "auto",
-              objectFit: "contain",
-              filter: "grayscale(1)",
-            }}
+            style={{ height: 26, width: "auto", objectFit: "contain" }}
             crossOrigin="anonymous"
           />
         ) : agencyName ? (
@@ -93,7 +86,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
               fontSize: 11,
               color: INK,
               fontWeight: 500,
-              letterSpacing: "0.18em",
+              letterSpacing: "0.24em",
               textTransform: "uppercase",
             }}
           >
@@ -101,32 +94,34 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           </div>
         ) : null}
       </div>
+      <div style={{ height: 1, background: RULE_STRONG }} />
 
       {/* Greeting */}
-      <div
-        style={{
-          fontSize: 18,
-          color: SUB,
-          fontWeight: 500,
-          marginBottom: 6,
-          letterSpacing: "-0.005em",
-        }}
-      >
-        {offer.applicant_name ? `${offer.applicant_name}，` : ""}恭喜你获得录取。
-      </div>
-      <div style={{ fontSize: 13, color: MUTE, marginBottom: 56 }}>
-        以下是录取的详细信息
+      <div style={{ marginTop: 56, marginBottom: 56 }}>
+        <div
+          style={{
+            fontSize: 17,
+            color: INK,
+            fontWeight: 500,
+            letterSpacing: "-0.005em",
+            lineHeight: 1.4,
+          }}
+        >
+          {offer.applicant_name ? `${offer.applicant_name}，` : ""}恭喜你获得录取。
+        </div>
+        <div style={{ marginTop: 6, fontSize: 13, color: MUTE }}>
+          以下是录取的详细信息
+        </div>
       </div>
 
-      {/* Hero school name */}
+      {/* Hero school name — keynote-large */}
       <h1
         style={{
-          fontSize: 64,
+          fontSize: 76,
           lineHeight: 0.95,
-          letterSpacing: "-0.04em",
+          letterSpacing: "-0.045em",
           fontWeight: 500,
           margin: 0,
-          marginBottom: 16,
           color: INK,
           wordBreak: "break-word",
         }}
@@ -134,54 +129,81 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         {schoolZh}
       </h1>
       {schoolZh !== offer.school && (
-        <div style={{ fontSize: 13, color: MUTE, letterSpacing: "0.02em" }}>
+        <div
+          style={{
+            marginTop: 14,
+            fontSize: 14,
+            color: MUTE,
+            letterSpacing: "0.01em",
+          }}
+        >
           {offer.school}
         </div>
       )}
 
-      <div style={{ height: 1, background: RULE, margin: "44px 0 28px" }} />
-
-      {/* Facts list */}
-      <SectionLabel>基本信息</SectionLabel>
-      <div style={{ marginBottom: 44 }}>
-        <FactRow
-          label="录取专业"
-          value={programZh || offer.program}
-          secondary={programZh ? offer.program : undefined}
-        />
-        {facultyZh && <FactRow label="学院" value={facultyZh} />}
-        {offer.student_category && (
-          <FactRow label="学生类别" value={offer.student_category} />
-        )}
-        {termStartDisplay && (
-          <FactRow label="入学时间" value={termStartDisplay} />
-        )}
-        {offer.duration && <FactRow label="学习时长" value={offer.duration} />}
-        {offer.fees?.tuition && (
-          <FactRow
-            label={feeLabel("学费", offer.fees.tuition)}
-            value={feeValue(offer.fees.tuition)}
-            secondary={offer.fees.tuition.note}
-          />
-        )}
-        {offer.fees?.deposit && (
-          <FactRow
-            label="留位费"
-            value={feeValue(offer.fees.deposit)}
-            secondary={offer.fees.deposit.note}
-          />
-        )}
-        {offer.fees?.scholarship && (
-          <FactRow
-            label="奖学金"
-            value={feeValue(offer.fees.scholarship)}
-            secondary={offer.fees.scholarship.note}
-            isLast
-          />
+      {/* Programme as tagline */}
+      <div style={{ marginTop: 40 }}>
+        <div
+          style={{
+            fontSize: 22,
+            color: INK,
+            fontWeight: 500,
+            letterSpacing: "-0.015em",
+            lineHeight: 1.3,
+          }}
+        >
+          {programZh || offer.program}
+        </div>
+        {programZh && (
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 13,
+              color: MUTE,
+              letterSpacing: "0.01em",
+            }}
+          >
+            {offer.program}
+          </div>
         )}
       </div>
 
-      {/* info_gaps intentionally omitted from the share image — agency-only. */}
+      {/* Specs grid — keynote spec sheet feel */}
+      <div
+        style={{
+          marginTop: 56,
+          paddingTop: 28,
+          paddingBottom: 28,
+          borderTop: `1px solid ${RULE}`,
+          borderBottom: `1px solid ${RULE}`,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 24,
+        }}
+      >
+        <Spec label="学制" value={offer.duration ?? "—"} />
+        <Spec label="入学" value={termStartDisplay ?? "—"} />
+        <Spec
+          label="学院"
+          value={facultyZh ?? offer.student_category ?? "—"}
+        />
+      </div>
+
+      {/* Fees — big numbers */}
+      <div
+        style={{
+          marginTop: 24,
+          paddingBottom: 32,
+          borderBottom: `1px solid ${RULE}`,
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 24,
+        }}
+      >
+        <Fee label="学费" money={offer.fees?.tuition} />
+        <Fee label="留位费" money={offer.fees?.deposit} />
+        <Fee label="奖学金" money={offer.fees?.scholarship} />
+      </div>
 
       {offer.conditions && offer.conditions.length > 0 && (
         <Section title="录取条件">
@@ -225,9 +247,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
               <li
                 key={i}
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   color: SUB,
-                  lineHeight: 1.6,
+                  lineHeight: 1.65,
                   paddingLeft: 18,
                   position: "relative",
                   marginTop: i === 0 ? 0 : 10,
@@ -237,7 +259,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
                   style={{
                     position: "absolute",
                     left: 0,
-                    top: 10,
+                    top: 9,
                     width: 8,
                     height: 1,
                     background: INK,
@@ -250,47 +272,106 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         </Section>
       )}
 
-      {/* Bottom double rule */}
-      <div style={{ height: 1, background: RULE, marginTop: 48 }} />
-      <div style={{ height: 4 }} />
-      <div style={{ height: 1, background: RULE_STRONG }} />
-
       {/* Footer */}
       <div
         style={{
-          marginTop: 16,
+          marginTop: 64,
+          paddingTop: 18,
+          borderTop: `1px solid ${RULE_STRONG}`,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           fontSize: 11,
-          color: MUTE,
-          letterSpacing: "0.18em",
+          color: INK,
+          letterSpacing: "0.24em",
           textTransform: "uppercase",
           fontWeight: 500,
         }}
       >
-        <span>{agencyName ? `Curated by ${agencyName}` : "OfferLens"}</span>
-        <span style={{ fontVariantNumeric: "tabular-nums" }}>{todayStr}</span>
+        <span>
+          {agencyName ? `Curated by ${agencyName}` : "Curated by OfferLens"}
+        </span>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>{dateStamp}</span>
       </div>
     </div>
   );
 });
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function Spec({ label, value }: { label: string; value: string }) {
   return (
-    <h2
-      style={{
-        fontSize: 11,
-        letterSpacing: "0.24em",
-        textTransform: "uppercase",
-        color: INK,
-        fontWeight: 500,
-        marginTop: 0,
-        marginBottom: 18,
-      }}
-    >
-      {children}
-    </h2>
+    <div>
+      <div
+        style={{
+          fontSize: 10,
+          color: MUTE,
+          textTransform: "uppercase",
+          letterSpacing: "0.24em",
+          fontWeight: 500,
+          marginBottom: 8,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 18,
+          color: INK,
+          fontWeight: 500,
+          letterSpacing: "-0.01em",
+          fontVariantNumeric: "tabular-nums",
+          lineHeight: 1.3,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Fee({ label, money }: { label: string; money?: Money | null }) {
+  const value = formatMoney(money);
+  const showApprox =
+    money && money.is_estimate && !money.manually_edited && value !== "—";
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 10,
+          color: MUTE,
+          textTransform: "uppercase",
+          letterSpacing: "0.24em",
+          fontWeight: 500,
+          marginBottom: 10,
+        }}
+      >
+        {label}
+        {money?.is_partial && !money.manually_edited && " · 首期"}
+      </div>
+      <div
+        style={{
+          fontSize: 28,
+          color: INK,
+          fontWeight: 500,
+          letterSpacing: "-0.025em",
+          fontVariantNumeric: "tabular-nums",
+          lineHeight: 1.1,
+        }}
+      >
+        {showApprox ? `≈ ${value}` : value}
+      </div>
+      {money?.note && (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 11,
+            color: MUTE,
+            lineHeight: 1.5,
+          }}
+        >
+          {money.note}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -302,71 +383,22 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section style={{ marginBottom: 44 }}>
-      <SectionLabel>{title}</SectionLabel>
-      {children}
-    </section>
-  );
-}
-
-function FactRow({
-  label,
-  value,
-  secondary,
-  isLast,
-}: {
-  label: string;
-  value: string;
-  secondary?: string;
-  isLast?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        gap: 24,
-        padding: "16px 0",
-        borderBottom: isLast ? "none" : `1px solid ${RULE}`,
-      }}
-    >
-      <div
+    <section style={{ marginTop: 56 }}>
+      <h2
         style={{
-          fontSize: 13,
-          color: MUTE,
-          width: 92,
-          flex: "0 0 92px",
-          letterSpacing: "0.04em",
+          fontSize: 11,
+          letterSpacing: "0.28em",
+          textTransform: "uppercase",
+          color: INK,
+          fontWeight: 500,
+          marginTop: 0,
+          marginBottom: 20,
         }}
       >
-        {label}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 17,
-            color: INK,
-            lineHeight: 1.4,
-            fontVariantNumeric: "tabular-nums",
-            wordBreak: "break-word",
-          }}
-        >
-          {value}
-        </div>
-        {secondary && (
-          <div
-            style={{
-              fontSize: 12,
-              color: MUTE,
-              marginTop: 5,
-              lineHeight: 1.55,
-            }}
-          >
-            {secondary}
-          </div>
-        )}
-      </div>
-    </div>
+        {title}
+      </h2>
+      {children}
+    </section>
   );
 }
 
@@ -390,18 +422,20 @@ function ListItem({
       style={{
         display: "flex",
         alignItems: "baseline",
-        gap: 16,
+        gap: 18,
         padding: "16px 0",
         borderBottom: isLast ? "none" : `1px solid ${RULE}`,
       }}
     >
       <span
         style={{
-          fontSize: 13,
+          fontSize: 11,
           color: MUTE,
-          width: 26,
+          width: 28,
           fontVariantNumeric: "tabular-nums",
-          letterSpacing: "0.04em",
+          letterSpacing: "0.24em",
+          textTransform: "uppercase",
+          fontWeight: 500,
         }}
       >
         {String(index).padStart(2, "0")}
@@ -413,6 +447,7 @@ function ListItem({
             lineHeight: 1.5,
             color: INK,
             fontWeight: emphasis ? 600 : 400,
+            letterSpacing: "-0.005em",
           }}
         >
           {main}
@@ -423,7 +458,7 @@ function ListItem({
               fontSize: 13,
               color: SUB,
               marginTop: 8,
-              lineHeight: 1.6,
+              lineHeight: 1.65,
               whiteSpace: "pre-line",
             }}
           >
@@ -433,31 +468,20 @@ function ListItem({
         {deadline && (
           <div
             style={{
-              fontSize: 12,
+              fontSize: 11,
               color: MUTE,
-              marginTop: 8,
-              letterSpacing: "0.04em",
+              marginTop: 10,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              fontWeight: 500,
             }}
           >
-            截止 {formatDate(deadline)}
+            截止 · {formatDate(deadline)}
           </div>
         )}
       </div>
     </li>
   );
-}
-
-function feeLabel(base: string, m: Money): string {
-  if (m.manually_edited) return base;
-  if (m.is_partial) return `${base}（首期）`;
-  if (m.is_estimate) return `${base}（估算）`;
-  return base;
-}
-
-function feeValue(m: Money): string {
-  const f = formatMoney(m);
-  if (!m.manually_edited && m.is_estimate && f !== "—") return `≈ ${f}`;
-  return f;
 }
 
 function sortedTodos(todos: MustDo[]): MustDo[] {
