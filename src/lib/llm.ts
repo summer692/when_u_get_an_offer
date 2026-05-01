@@ -167,14 +167,32 @@ conditions vs must_do（必须区分清楚，不要同一件事写在两处）�
 - **每一个具体日期**都必须出现在某个字段的 deadline 中（must_do.deadline / conditions.deadline / key_dates.date）。**漏掉任何一个具体日期都属于严重错误**。
 - 一份合格的输出，应该让用户仅看抽取结果就能知道"我什么时候要做什么"，而不需要再回去翻 offer 原文。
 
-学费计算（**重要：旧规则已废弃，请严格遵守新规则**）：
-- offer 上的"每学分单价 / per-credit fee"几乎都是**首期账单的临时折算价**（特别是当它出现在 "Debit Note" / "this debit note" / "Note on Tuition Fee" 注释里时），**不是**该项目官方公布的单价。**绝对不要**用它做 total 学费的乘法计算。
-- 只有当 offer **明确直接**列出"项目总学费"数字（如 "Total Programme Tuition: HK$530,400"、"Programme Fee: USD 80,000 in total"）时，才用这个数字，is_estimate = false。
-- 任何其它情况（offer 只列首期 / 只列单价 / 只列总学分 / 给了"年度学费 + 学制"组合等）**都不要在抽取阶段计算 total**。
-  - tuition 直接设为 null
-  - info_gaps 加一条"学费未在 offer 上明确列出全程总额，请到 [学校] 官网查询"
-  - 后续的研究步骤会用官网的当前公布单价补全。
-- **明令禁止**：不要做"项目总学分 × offer 上的 per-credit 单价"的乘法（如 31 × HK$8,500 这种）—— 这种乘法用的是错误的单价来源，结果会是错的。
+学费抽取（**严格按以下优先级**，从高到低）：
+
+优先级 1 — offer 上**明确写出了"项目总学费"数字** → 直接采用，is_estimate=false：
+- 关键词："Composition fee of programme"、"Total Programme Tuition / Fee"、"Programme Fee"、"学费总额"、"全程学费"、"项目总学费"、"Total tuition"。
+- ⚠️ **分期付款 ≠ 不可靠**："(payable in 3 instalments)" / "to be paid in three equal instalments" / "分 3 期缴纳" 描述**付款方式**，不影响总额的真实性。如果 offer 给了 total，**仍然采用 total**。
+- 例子 1（来自真实 HKUST offer）：
+  "Composition fee of programme: HK$420,000 (provisional and to be paid in three equal instalments) for 84 credit-units"
+  → tuition = { amount: 420000, currency: "HKD", period: "total", is_estimate: false, note: "依据 offer 公布的项目总学费，分 3 期缴纳" }
+- 例子 2： "Programme Fee: USD 80,000 in total" → amount = 80000, period = "total", is_estimate = false
+- 例子 3： "学费总额：人民币 38 万元" → amount = 380000, currency = "CNY", period = "total", is_estimate = false
+
+优先级 2 — offer 上**明确写**"按学分单价 + 项目总学分"，**且单价不在 Debit Note / 首期账单注释里** → 自己相乘，is_estimate=true：
+- 例子："Tuition: HK$13,600 per credit, 84 credits in total"（写在项目费用总览段落里）
+  → amount = 84 × 13600 = 1142400, is_estimate = true, note = "84 学分 × HK$13,600（依据 offer 估算）"
+
+优先级 3 — offer 上的学费**仅来自 Debit Note / 首期账单 / 单学期金额** → tuition = null，让研究步骤补全：
+- 例子（PolyU 那种）："Note on Tuition Fee: this debit note is calculated as 12 credits × HK$8,500/credit"
+  → tuition = null, info_gaps 加一条 "学费仅显示首期账单折算价，请到学校官网查询正式费率"
+
+优先级 4 — offer 完全没提学费 → tuition = null + info_gaps "学费未在 offer 上明确列出，请到 [学校] 官网查询"。
+
+**关键判断技巧（防止把优先级 1 误判成 3）**：
+- "分期付款 / instalment / 三期支付 / spread over X payments" = 付款方式说明，**不影响**总额真实性。
+- "Debit Note 1: 12 credits × $X" / "Note on Tuition Fee" 注释段 = **首期账单临时折算价**，不可靠。
+- 区分点：数字**前后是否给出了"项目总额"**？给了就是优先级 1；只有按学分单价、首期金额，没有总额数字，才是优先级 3。
+- 优先级 1 是最常见也最高优先的情况。当 offer 同时给"总额 + 分期"，**永远选总额**，绝不要把它判成 null。
 
 留位费 / Caution Money（沿用之前规则）：
 - "Caution Money" / "留位费" / "Acceptance Deposit" / "Enrolment Deposit" / "Seat Deposit" 一律放 fees.deposit，不要塞进 tuition。
@@ -489,13 +507,23 @@ export function applyResearch<T extends ExtractedOffer>(
 ): T {
   const merged: T = { ...offer, fees: { ...(offer.fees ?? {}) } };
   if (research.tuition) {
-    // Research from the school's website is treated as authoritative (not an
-    // estimate, not partial). User can still manually override later.
-    merged.fees!.tuition = {
-      ...research.tuition,
-      is_partial: false,
-      is_estimate: false,
-    };
+    const existing = merged.fees!.tuition;
+    // Don't overwrite values the user explicitly verified, or values the
+    // offer itself stated authoritatively (no estimate / partial flags).
+    const existingIsAuthoritative =
+      existing &&
+      existing.amount > 0 &&
+      !existing.is_partial &&
+      !existing.is_estimate &&
+      !existing.manually_edited;
+    const userVerified = existing?.manually_edited === true;
+    if (!userVerified && !existingIsAuthoritative) {
+      merged.fees!.tuition = {
+        ...research.tuition,
+        is_partial: false,
+        is_estimate: false,
+      };
+    }
   }
   if (research.scholarship && !merged.fees!.scholarship) {
     merged.fees!.scholarship = research.scholarship;
