@@ -45,17 +45,35 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       ref={ref}
       style={{
         width: W,
-        // Stage lighting: a soft elliptical spotlight fades into deep black,
-        // exactly like an Apple keynote title slide.
-        background: `radial-gradient(ellipse 760px 520px at 50% 22%, rgba(255,255,255,0.08), rgba(255,255,255,0.02) 38%, transparent 72%), ${BG}`,
+        backgroundColor: BG,
         color: INK,
         fontFamily: fontStack,
         padding: `64px ${PAD_X}px 56px`,
         boxSizing: "border-box",
         WebkitFontSmoothing: "antialiased",
         letterSpacing: 0,
+        position: "relative",
+        overflow: "hidden",
       }}
     >
+      {/* Stage spotlight — kept as a separate layer so html-to-image can't
+          alpha-blend it against an unintended fallback color. */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          top: -80,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 900,
+          height: 600,
+          backgroundImage:
+            "radial-gradient(ellipse at center, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 38%, rgba(0,0,0,0) 72%)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+      <div style={{ position: "relative", zIndex: 1 }}>
       {/* Brand strip — country left, agency right, separated by hairline */}
       <div
         style={{
@@ -303,6 +321,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           {agencyName ? `Curated by ${agencyName}` : "Curated by OfferLens"}
         </span>
         <span style={{ fontVariantNumeric: "tabular-nums" }}>{dateStamp}</span>
+      </div>
       </div>
     </div>
   );
