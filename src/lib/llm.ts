@@ -411,11 +411,11 @@ function cleanMoney<T extends { amount?: unknown; currency?: unknown }>(
  * Merge research findings into an extracted offer. New fees come with
  * is_partial = false (research returns full / official totals only).
  */
-export function applyResearch(
-  offer: ExtractedOffer,
+export function applyResearch<T extends ExtractedOffer>(
+  offer: T,
   research: ResearchResult,
-): ExtractedOffer {
-  const merged: ExtractedOffer = { ...offer, fees: { ...(offer.fees ?? {}) } };
+): T {
+  const merged: T = { ...offer, fees: { ...(offer.fees ?? {}) } };
   if (research.tuition) {
     // Research from the school's website is treated as authoritative (not an
     // estimate, not partial). User can still manually override later.
