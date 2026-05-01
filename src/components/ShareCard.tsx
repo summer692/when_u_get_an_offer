@@ -9,7 +9,10 @@ interface Props {
 }
 
 const W = 720;
-const H = 1280; // 9:16 — fits a phone screen edge-to-edge without scrolling
+// Target a phone-screen aesthetic without clipping. minHeight keeps short
+// offers feeling like a full-bleed poster; height stays auto so content-rich
+// offers grow another section or two instead of getting cut off at the bottom.
+const MIN_H = 1280; // 9:16 — IG-story aspect
 const PAD_X = 64;
 // How many items each list shows before collapsing to a "+N 更多" tail.
 // Tuned so a typical 5-condition + 3-todo + 2-note offer stays in a 9:16 frame.
@@ -52,7 +55,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       ref={ref}
       style={{
         width: W,
-        height: H,
+        minHeight: MIN_H,
         backgroundColor: BG,
         color: INK,
         fontFamily: fontStack,
@@ -61,6 +64,8 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         WebkitFontSmoothing: "antialiased",
         letterSpacing: 0,
         position: "relative",
+        // Clip the spotlight that pokes above the card, but the card itself
+        // grows downward as needed — content never gets cut.
         overflow: "hidden",
       }}
     >
@@ -87,7 +92,10 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           zIndex: 1,
           display: "flex",
           flexDirection: "column",
-          height: "100%",
+          // At least fill the interior of a 1280 frame (padding 64 top + 56
+          // bottom), so footer's marginTop:auto pins it to the bottom on
+          // short offers. Grows past this on content-heavy offers.
+          minHeight: MIN_H - 64 - 56,
         }}
       >
       {/* Brand strip — country left, agency right, separated by hairline */}
