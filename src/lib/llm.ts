@@ -99,8 +99,14 @@ Schema:
 - 一切 label 用中文，简洁。
 
 学费 vs 留位费（重要，常见错误源）：
-- "Caution Money" / "留位费" / "Acceptance Deposit" / "Enrolment Deposit" / "Seat Deposit" 一律放 fees.deposit，**不要**当成 tuition。
-- 真正的学费 (tuition) 是项目本身的教学费，常见关键词："Tuition Fee" / "Programme Fee" / "学费" / "Course Fee"。
+- "Caution Money" / "留位费" / "Acceptance Deposit" / "Enrolment Deposit" / "Seat Deposit" 不能塞进 tuition。
+- 真正的学费 (tuition) 是整个项目的教学总费用，常见关键词："Tuition Fee" / "Programme Fee" / "学费" / "Course Fee"。
+
+fees.deposit 的语义（重要）：
+- fees.deposit 的含义是"为了确认录取、必须在 deposit_deadline 之前缴纳的总金额"——也就是中介或学生口头说的"留位费 / 接受 offer 要交多少钱"。
+- 如果 offer 上的"Debit Note 1 / 首期账单 / Initial Payment"包含若干小项（caution money + tuition first installment + 其它 fees），fees.deposit.amount 应该是它们的**合计 (Total Fee)**，而不是其中某一行。
+- 例子：PolyU offer 的 Debit Note 1 写 "Caution Money 400 + Tuition fee 102,000 = Total 102,400, Payment Deadline 19-Mar-2026"，则 fees.deposit = { amount: 102400, currency: "HKD", note: "Caution Money 400 + 首期学费 102,000" }，并在 key_dates 中加 deposit_deadline=2026-03-19，在 must_do 中加高优先级"在 2026-03-19 前缴纳 HK$102,400 以确认录取"。
+- 如果 offer 只有一个独立的 "refundable deposit" 数字（不含首期学费），那 fees.deposit 就是这个独立数字。
 
 学费计算（优先尝试，避免 is_partial）：
 - **如果 offer 同时给出了"项目总学分"（如 "Programme Credit Requirements: 31.0"、"30 credits in total"、"修读 30 学分"）和"按学分单价"（如 "HK$8,500/credit"），请你自己用乘法算出全程总学费，并填到 tuition：**
@@ -345,21 +351,40 @@ export async function researchOffer(
   const parsed = safeJsonParse(text) as Partial<ResearchResult> | null;
   if (!parsed || typeof parsed !== "object") return null;
 
+  // The model's freeform `source` URLs in the JSON are not trustworthy — it
+  // tends to write a plausible-looking school path that 404s. Only Gemini's
+  // groundingMetadata.groundingChunks contains the URLs that were actually
+  // fetched during search. Replace any model-supplied source with the first
+  // grounded URI, and drop it entirely if no grounded sources exist.
   const groundingChunks: { web?: { uri?: string; title?: string } }[] =
     json?.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
   const groundedSources = groundingChunks
     .map((c) => c.web?.uri)
     .filter((u): u is string => !!u);
+  const verifiedSource = groundedSources[0];
 
   return {
-    tuition: cleanMoney(parsed.tuition),
-    scholarship: cleanMoney(parsed.scholarship),
+    tuition: withVerifiedSource(cleanMoney(parsed.tuition), verifiedSource),
+    scholarship: withVerifiedSource(
+      cleanMoney(parsed.scholarship),
+      verifiedSource,
+    ),
     duration:
       typeof parsed.duration === "string" && parsed.duration.trim()
         ? parsed.duration.trim()
         : undefined,
     sources: groundedSources,
   };
+}
+
+function withVerifiedSource<T extends { source?: unknown }>(
+  m: T | undefined,
+  verified: string | undefined,
+): T | undefined {
+  if (!m) return undefined;
+  const { source: _omit, ...rest } = m;
+  if (verified) return { ...(rest as T), source: verified };
+  return rest as T;
 }
 
 function cleanMoney<T extends { amount?: unknown; currency?: unknown }>(
