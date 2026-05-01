@@ -115,35 +115,44 @@ Schema:
   - program_zh 是项目的中文译名（学校官方公布的优先；没有就用通用直译），例如 "MSc Sustainable Energy" → "可持续能源理学硕士"；"MSc Computer Science" → "计算机科学理学硕士"；"MBA" → "工商管理硕士"。
   - degree_zh: Master/MSc/MA → "硕士"；Bachelor/BSc/BA → "学士"；PhD/Doctor of Philosophy → "博士"；Master of Engineering → "工程硕士"。
   - country_zh: Hong Kong → "中国香港"；United Kingdom/UK → "英国"；United States/US → "美国"；Australia → "澳大利亚"；Singapore → "新加坡"；Mainland China → "中国大陆"。
+- **英文规范化**：如果 offer 把学校或专业名写成全大写（如 "THE HONG KONG POLYTECHNIC UNIVERSITY" / "MSC SUSTAINABLE ENERGY"），抽取到 school / program 字段时**必须规范化为 Title Case**："The Hong Kong Polytechnic University" / "MSc Sustainable Energy"。常见缩写保持原样大写：MSc, MA, MBA, PhD, BSc, BA, MEng, MFA, LLM, MPhil, USA, UK, HK, MIT, NUS。
 
-学费 vs 留位费（重要，常见错误源）：
-- "Caution Money" / "留位费" / "Acceptance Deposit" / "Enrolment Deposit" / "Seat Deposit" 不能塞进 tuition。
-- 真正的学费 (tuition) 是整个项目的教学总费用，常见关键词："Tuition Fee" / "Programme Fee" / "学费" / "Course Fee"。
+conditions vs must_do（必须区分清楚，不要同一件事写在两处）：
+- **conditions = 学术 / 资格类录取条件**，描述"你必须满足或具备的状态 / 文件 / 资格"。例如：
+  - "持有 GPA ≥ 3.0 的学士学位"
+  - "提交雅思 7.0 / 托福 100 成绩"
+  - "完成资格审核 (Qualification Verification)"
+  - "本科最后一学期成绩单"
+- **must_do = 学生必须主动采取的动作**，特别是付款、注册、签证、提交材料、面试预约等。例如：
+  - "缴纳首期学费及留位费 HK$102,400 以确认录取"
+  - "完成在线项目注册"
+  - "申请 CAS / I-20 / 学生签证"
+  - "提交资格审核所需文件"
+- **同一件事只能出现在一处**。付款类**一律 must_do**，即使 offer 把 "Pay your deposit by Y" 写在 "Acceptance Conditions" 标题下，也归 must_do（不归 conditions）。
+- must_do[].action **只描述要做什么，不要在 action 里嵌入日期**：
+  ❌ "在 2026-08-31 前完成在线项目注册"
+  ✅ "完成在线项目注册"，deadline = "2026-08-31"
+- 涉及金额可以写在 action 里（"缴纳留位费 HK$102,400"），但**日期一律只放 deadline 字段**。
 
-fees.deposit 的语义（重要）：
+学费计算（**重要：旧规则已废弃，请严格遵守新规则**）：
+- offer 上的"每学分单价 / per-credit fee"几乎都是**首期账单的临时折算价**（特别是当它出现在 "Debit Note" / "this debit note" / "Note on Tuition Fee" 注释里时），**不是**该项目官方公布的单价。**绝对不要**用它做 total 学费的乘法计算。
+- 只有当 offer **明确直接**列出"项目总学费"数字（如 "Total Programme Tuition: HK$530,400"、"Programme Fee: USD 80,000 in total"）时，才用这个数字，is_estimate = false。
+- 任何其它情况（offer 只列首期 / 只列单价 / 只列总学分 / 给了"年度学费 + 学制"组合等）**都不要在抽取阶段计算 total**。
+  - tuition 直接设为 null
+  - info_gaps 加一条"学费未在 offer 上明确列出全程总额，请到 [学校] 官网查询"
+  - 后续的研究步骤会用官网的当前公布单价补全。
+- **明令禁止**：不要做"项目总学分 × offer 上的 per-credit 单价"的乘法（如 31 × HK$8,500 这种）—— 这种乘法用的是错误的单价来源，结果会是错的。
+
+留位费 / Caution Money（沿用之前规则）：
+- "Caution Money" / "留位费" / "Acceptance Deposit" / "Enrolment Deposit" / "Seat Deposit" 一律放 fees.deposit，不要塞进 tuition。
+
+fees.deposit 的语义（沿用之前规则）：
 - fees.deposit 的含义是"为了确认录取、必须在 deposit_deadline 之前缴纳的总金额"——也就是中介或学生口头说的"留位费 / 接受 offer 要交多少钱"。
 - 如果 offer 上的"Debit Note 1 / 首期账单 / Initial Payment"包含若干小项（caution money + tuition first installment + 其它 fees），fees.deposit.amount 应该是它们的**合计 (Total Fee)**，而不是其中某一行。
 - 例子：PolyU offer 的 Debit Note 1 写 "Caution Money 400 + Tuition fee 102,000 = Total 102,400, Payment Deadline 19-Mar-2026"，则 fees.deposit = { amount: 102400, currency: "HKD", note: "Caution Money 400 + 首期学费 102,000" }，并在 key_dates 中加 deposit_deadline=2026-03-19，在 must_do 中加高优先级"在 2026-03-19 前缴纳 HK$102,400 以确认录取"。
 - 如果 offer 只有一个独立的 "refundable deposit" 数字（不含首期学费），那 fees.deposit 就是这个独立数字。
 
-学费计算（优先尝试，但要标为估算）：
-- **如果 offer 同时给出了"项目总学分"（如 "Programme Credit Requirements: 31.0"、"30 credits in total"、"修读 30 学分"）和"按学分单价"（如 "HK$13,600/credit"），请你自己用乘法算出全程总学费，并填到 tuition：**
-  amount = 总学分 × 单价
-  period = "total"
-  is_partial = false
-  is_estimate = true   // 必须！自己算出来的数字一律标为估算，因为可能存在论文学分豁免、奖学金抵扣等 offer 上未写明的细则
-  note = "{总学分} 学分 × {币种}{单价}（依据 offer 估算，未核实学分豁免）"
-- 同理：如果 offer 给出"按年学费 + 学制年数"，也可以直接相乘得到 total，同样设 is_estimate = true。
-- **必须真的相乘得出一个具体的整数**，不要只写公式不写数字。
-- 只有 offer 上**直接写明了**项目总学费数字（不是按学分/按年推算的），才能 is_estimate = false。
-
-⚠️ 关键：判断 per-credit 单价是否可靠（避免把首期账单单价当作官方学费）：
-- 如果"按学分单价"出现在 **"Debit Note" / "首期账单" / "Initial Bill" / "this debit note" 的注释 / Note on Tuition Fee** 里 —— 这个单价**很可能只是首期账单临时使用的折算值**（例如 PolyU 把第一学期 12 学分按 HK$8,500 计算），并不是该项目官方公布的标准单价。
-- 在这种情况下**不要**自动相乘当 total，应当：
-  (1) 把这个 per-credit × first-installment-credits 的数字放到 fees.deposit 或者 must_do 里说明；
-  (2) tuition 设为 null 或保留首期金额并设 is_partial = true；
-  (3) 在 info_gaps 加一条"offer 仅给出首期账单单价，项目总学费需查官网"，让后续研究步骤去官网取真实费率。
-- 只有当单价出现在 **项目费用总览 / Programme Fee / Tuition Fee 段落（不是 debit note 注释）** 时才安全地相乘得 total。
+（学费计算规则见上方"学费计算"段；新版本不再做自动相乘，未明确列出总学费时直接 tuition=null + info_gaps + 等研究步骤）
 
 学费仍然不完整时（is_partial = true）：
 - 只有在 offer 上的学费数字是"首期 / 单学期 / 单学分 / 一部分付款"，并且**也无法从 offer 自身算出总额**时，才把它放到 tuition 并设 is_partial = true。
@@ -340,11 +349,13 @@ export async function researchOffer(
 
 请补全以下字段。规则：
 1. **只能用学校官方网站**（如 .edu.hk、.edu、.ac.uk、.edu.au、.edu.cn 等学校自己的域名），不要用第三方留学网站、论坛、知乎、小红书等。
-2. 如果官网公布了"X 学分 × Y/学分"，请算出 X*Y 作为 total 学费。
-3. **特别留意可能的减免规则**——很多项目存在学分豁免（如 dissertation credit fee-waived、capstone credit non-tuition）、奖学金内置折扣、首学期减免、本地 vs 非本地费率差异。看到"fee waiver / exempt / non-tuition / scholarship-discounted"等字眼时必须读完整段并把规则反映到 amount 或 note 里。
-4. 学费必须明确币种 (HKD / USD / GBP 等三字母 ISO 代码)。
-5. 入学时间用于确认你查到的是该届新生的费率（例如 2026/27 入学）。如果你只能查到旧届费率，请在 note 里注明并返回 null amount，让用户自己核对。
-6. 如果搜不到具体数字，对应字段返回 null。**绝对不要编造**。
+2. **绝对不要复用 offer 文件里写的 per-credit / 单学期 / 首期账单的金额**——那些通常是临时折算值。所有数字**必须**直接来自学校官网当前公布的费率页（"Tuition Fee" / "Programme Fee" / "Fees and Funding" 类页面）。
+3. 如果官网公布"项目总学费 X"（如 "HK$530,400 per programme"），直接使用 X。
+4. 如果官网只公布"per-credit Y"和"项目总学分要求 Z"，那么 amount = Z * Y；如果有 1-credit Academic Integrity 等明确不收学费的学分，请在乘法中扣除并在 note 里说明。
+5. **特别留意可能的减免规则**——学分豁免、奖学金内置折扣、首学期减免、本地 vs 非本地费率差异。看到 "fee waiver / exempt / non-tuition / scholarship-discounted" 字样时必须读完整段并反映到 amount 或 note。
+6. 学费必须明确币种 (HKD / USD / GBP 等三字母 ISO 代码)。
+7. 入学时间用于确认你查到的是该届新生的费率（如 2026/27 入学）。如果只能查到旧届费率，请在 note 里注明并返回 null amount，让用户自己核对。
+8. 如果搜不到具体数字，对应字段返回 null。**绝对不要编造**。
 
 请输出一段 JSON（包在 \`\`\`json 代码块里）：
 
