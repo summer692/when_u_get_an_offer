@@ -109,17 +109,17 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       <div style={{ height: 1, background: HAIRLINE_STRONG }} />
 
       {/* Greeting */}
-      <div style={{ marginTop: 40, marginBottom: 20 }}>
+      <div style={{ marginTop: 36, marginBottom: 22 }}>
         <div
           style={{
-            fontSize: 17,
-            color: SUB,
-            fontWeight: 400,
-            letterSpacing: "-0.005em",
-            lineHeight: 1.4,
+            fontSize: 22,
+            color: INK,
+            fontWeight: 500,
+            letterSpacing: "-0.015em",
+            lineHeight: 1.35,
           }}
         >
-          {offer.applicant_name ? `${offer.applicant_name}，` : ""}恭喜你获得录取
+          🎉 {offer.applicant_name ? `${offer.applicant_name}，` : ""}恭喜你获得录取
         </div>
       </div>
 
@@ -258,12 +258,12 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
               <li
                 key={i}
                 style={{
-                  fontSize: 13,
-                  color: SUB,
-                  lineHeight: 1.65,
-                  paddingLeft: 18,
+                  fontSize: 15,
+                  color: INK,
+                  lineHeight: 1.6,
+                  paddingLeft: 20,
                   position: "relative",
-                  marginTop: i === 0 ? 0 : 8,
+                  marginTop: i === 0 ? 0 : 10,
                 }}
               >
                 <span
@@ -314,11 +314,11 @@ function Spec({ label, value }: { label: string; value: string }) {
     <div>
       <div
         style={{
-          fontSize: 10,
-          color: MUTE,
+          fontSize: 12,
+          color: SUB,
           textTransform: "uppercase",
-          letterSpacing: "0.28em",
-          fontWeight: 500,
+          letterSpacing: "0.24em",
+          fontWeight: 600,
           marginBottom: 10,
         }}
       >
@@ -326,7 +326,7 @@ function Spec({ label, value }: { label: string; value: string }) {
       </div>
       <div
         style={{
-          fontSize: 18,
+          fontSize: 20,
           color: INK,
           fontWeight: 500,
           letterSpacing: "-0.01em",
@@ -349,11 +349,11 @@ function Fee({ label, money }: { label: string; money?: Money | null }) {
     <div>
       <div
         style={{
-          fontSize: 10,
-          color: MUTE,
+          fontSize: 12,
+          color: SUB,
           textTransform: "uppercase",
-          letterSpacing: "0.28em",
-          fontWeight: 500,
+          letterSpacing: "0.24em",
+          fontWeight: 600,
           marginBottom: 12,
         }}
       >
@@ -376,7 +376,7 @@ function Fee({ label, money }: { label: string; money?: Money | null }) {
         <div
           style={{
             marginTop: 10,
-            fontSize: 11,
+            fontSize: 12,
             color: MUTE,
             lineHeight: 1.5,
           }}
@@ -396,16 +396,16 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section style={{ marginTop: 28 }}>
+    <section style={{ marginTop: 32 }}>
       <h2
         style={{
-          fontSize: 11,
-          letterSpacing: "0.32em",
+          fontSize: 14,
+          letterSpacing: "0.24em",
           textTransform: "uppercase",
-          color: SUB,
-          fontWeight: 500,
+          color: INK,
+          fontWeight: 600,
           marginTop: 0,
-          marginBottom: 12,
+          marginBottom: 16,
         }}
       >
         {title}
@@ -442,12 +442,11 @@ function ListItem({
     >
       <span
         style={{
-          fontSize: 11,
+          fontSize: 13,
           color: MUTE,
-          width: 28,
+          width: 32,
           fontVariantNumeric: "tabular-nums",
-          letterSpacing: "0.24em",
-          textTransform: "uppercase",
+          letterSpacing: "0.18em",
           fontWeight: 500,
         }}
       >
@@ -468,7 +467,7 @@ function ListItem({
         {details && (
           <div
             style={{
-              fontSize: 13,
+              fontSize: 14,
               color: SUB,
               marginTop: 8,
               lineHeight: 1.65,
@@ -481,11 +480,10 @@ function ListItem({
         {deadline && (
           <div
             style={{
-              fontSize: 11,
-              color: MUTE,
-              marginTop: 10,
-              letterSpacing: "0.22em",
-              textTransform: "uppercase",
+              fontSize: 16,
+              color: SUB,
+              marginTop: 8,
+              lineHeight: 1.5,
               fontWeight: 500,
             }}
           >
