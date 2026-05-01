@@ -9,10 +9,12 @@ interface Props {
 }
 
 const W = 720;
-// Target a phone-screen aesthetic without clipping. minHeight keeps short
-// offers feeling like a full-bleed poster; height stays auto so content-rich
-// offers grow another section or two instead of getting cut off at the bottom.
-const MIN_H = 1280; // 9:16 — IG-story aspect
+// Lock to iPhone full-screen aspect (9:19.5). The exported PNG is the same
+// shape every time, regardless of how much an offer has to say. Footer is
+// pinned to the bottom via marginTop:auto so short offers don't leave a void;
+// content past the bottom edge is clipped (overflow:hidden) on the rare
+// content-heavy offer.
+const H = 1560;
 const PAD_X = 64;
 
 // Editorial monochrome: white page, near-black ink. The shareable image is
@@ -51,7 +53,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       ref={ref}
       style={{
         width: W,
-        minHeight: MIN_H,
+        height: H,
         backgroundColor: BG,
         color: INK,
         fontFamily: fontStack,
@@ -62,6 +64,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         position: "relative",
         display: "flex",
         flexDirection: "column",
+        overflow: "hidden",
       }}
     >
       {/* Brand strip — country left, agency right, separated by hairline */}
