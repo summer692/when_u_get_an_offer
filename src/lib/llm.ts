@@ -130,9 +130,28 @@ conditions vs must_do（必须区分清楚，不要同一件事写在两处）�
   - "提交资格审核所需文件"
 - **同一件事只能出现在一处**。付款类**一律 must_do**，即使 offer 把 "Pay your deposit by Y" 写在 "Acceptance Conditions" 标题下，也归 must_do（不归 conditions）。
 - must_do[].action **只描述要做什么，不要在 action 里嵌入日期**：
-  ❌ "在 2026-08-31 前完成在线项目注册"
-  ✅ "完成在线项目注册"，deadline = "2026-08-31"
+  ✅ offer 写 "Complete programme registration by 31 August 2026"
+     → action="完成在线项目注册"，deadline="2026-08-31"
+  ✅ offer 写 "Submit documents within 2 weeks of receiving this offer"
+     → action="在 2 周内提交资格审核所需文件"（**相对时间**保留在 action 里，因为没有具体日期），deadline=null
+  ❌ "在 2026-08-31 前完成在线项目注册"（日期不应嵌入 action）
+- ⚠️ 关键：把日期**挪到 deadline**，**不是把日期丢掉**。如果 offer 写了 "by 31 August 2026"，你应该把 "2026-08-31" 填到 deadline；**绝不允许**把日期从 action 删掉之后让 deadline 也是 null。
+- ⚠️ **明令禁止使用以下填充语**（这些是没有信息量的废话）：
+  ❌ "在指定时间内…"
+  ❌ "按规定时间…"
+  ❌ "在限期内…"
+  ❌ "在要求时间…"
+  ❌ "by the prescribed time / by the due date / by the scheduled date"（中文化时不要意译为"在指定时间内"）
+  如果你确实在 offer 上找不到具体日期或相对期限，请在 action 里写明："完成项目注册（offer 未给具体截止日，请查官网）"，并把 deadline 设为 null。
 - 涉及金额可以写在 action 里（"缴纳留位费 HK$102,400"），但**日期一律只放 deadline 字段**。
+
+⛔ 最重要规则：时间信息绝不丢失（产出 JSON 前**必须自检**）：
+- 在最终输出 JSON 之前，**扫描整份 offer 原文**，列出每一个时间相关字符串：
+  - 具体日期（"31 August 2026"、"19 Mar 2026"、"Aug 31, 2026"、"2026-08-31" 等）
+  - 相对期限（"within 2 weeks"、"由 offer 起 2 周内"、"5 working days"、"30 days from..."）
+  - 学期 / 学年（"Semester 1 of 2026/27"）
+- **每一个具体日期**都必须出现在某个字段的 deadline 中（must_do.deadline / conditions.deadline / key_dates.date）。**漏掉任何一个具体日期都属于严重错误**。
+- 一份合格的输出，应该让用户仅看抽取结果就能知道"我什么时候要做什么"，而不需要再回去翻 offer 原文。
 
 学费计算（**重要：旧规则已废弃，请严格遵守新规则**）：
 - offer 上的"每学分单价 / per-credit fee"几乎都是**首期账单的临时折算价**（特别是当它出现在 "Debit Note" / "this debit note" / "Note on Tuition Fee" 注释里时），**不是**该项目官方公布的单价。**绝对不要**用它做 total 学费的乘法计算。
