@@ -130,6 +130,7 @@ export default function App() {
           onOpen={setActiveId}
           onFile={handleFile}
           onText={handleText}
+          onDelete={remove}
         />
       )}
 

@@ -454,6 +454,16 @@ export async function extractOffer(
 
   if (!res.ok) {
     const body = await res.text();
+    if (res.status === 429) {
+      throw new Error(
+        `今日 ${provider === "google" ? "Google AI Studio" : "OpenRouter"} 免费层额度已用完。可在右上角「设置」中切到 Gemini 2.5 Flash-Lite（额度更高），或明天再试。`,
+      );
+    }
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        "API key 无效或被拒绝。请在右上角「设置」中确认 key 正确，并已启用对应模型权限。",
+      );
+    }
     throw new Error(`LLM request failed (${res.status}): ${body.slice(0, 300)}`);
   }
 
