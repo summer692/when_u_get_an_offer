@@ -30,6 +30,9 @@ const SUB = "#525252";
 const MUTE = "#86868B";
 const HAIRLINE = "#E5E5E7";
 const HAIRLINE_STRONG = "#0A0A0A";
+// Anything that's a calendar date (deadlines, term start) renders in red so
+// the student's eye locks onto the time-sensitive numbers first.
+const DATE_RED = "#D70015";
 
 export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   { offer, agencyName, agencyLogo },
@@ -92,7 +95,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           display: "flex",
           flexDirection: "column",
           transform: `scale(${scale})`,
-          transformOrigin: "0 0",
+          // Anchor the scale to top-center so an overflowing offer shrinks
+          // symmetrically into the frame instead of clinging to the left edge.
+          transformOrigin: "50% 0",
         }}
       >
       {/* Brand strip — country left, agency right, separated by hairline */}
@@ -224,7 +229,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         }}
       >
         <Spec label="学制" value={offer.duration ?? "—"} />
-        <Spec label="入学" value={termStartDisplay ?? "—"} />
+        <Spec label="入学" value={termStartDisplay ?? "—"} tone="date" />
         <Spec
           label="学院"
           value={facultyZh ?? offer.student_category ?? "—"}
@@ -341,7 +346,15 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   );
 });
 
-function Spec({ label, value }: { label: string; value: string }) {
+function Spec({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "date";
+}) {
   return (
     <div>
       <div
@@ -359,8 +372,8 @@ function Spec({ label, value }: { label: string; value: string }) {
       <div
         style={{
           fontSize: 20,
-          color: INK,
-          fontWeight: 500,
+          color: tone === "date" && value !== "—" ? DATE_RED : INK,
+          fontWeight: tone === "date" && value !== "—" ? 600 : 500,
           letterSpacing: "-0.01em",
           fontVariantNumeric: "tabular-nums",
           lineHeight: 1.3,
@@ -513,10 +526,10 @@ function ListItem({
           <div
             style={{
               fontSize: 16,
-              color: SUB,
+              color: DATE_RED,
               marginTop: 8,
               lineHeight: 1.5,
-              fontWeight: 500,
+              fontWeight: 600,
             }}
           >
             截止 · {formatDate(deadline)}

@@ -200,11 +200,15 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               value={
                 termStartDate ? (
                   <span className="inline-flex items-baseline gap-2">
-                    <span>{termStartDisplay}</span>
+                    <span className="text-red-600 dark:text-red-400 font-medium">
+                      {termStartDisplay}
+                    </span>
                     <CountdownPill date={termStartDate} />
                   </span>
                 ) : (
-                  termStartDisplay
+                  <span className="text-red-600 dark:text-red-400 font-medium">
+                    {termStartDisplay}
+                  </span>
                 )
               }
             />
@@ -363,8 +367,10 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                     </div>
                   )}
                   {c.deadline && (
-                    <div className="text-xs text-ink-500 mt-1.5 flex items-baseline gap-2">
-                      <span>截止 {formatDate(c.deadline)}</span>
+                    <div className="text-sm mt-1.5 flex items-baseline gap-2">
+                      <span className="text-red-600 dark:text-red-400 font-medium">
+                        截止 {formatDate(c.deadline)}
+                      </span>
                       <CountdownPill date={c.deadline} />
                     </div>
                   )}
@@ -404,8 +410,10 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                     </div>
                   )}
                   {m.deadline && (
-                    <div className="text-sm text-ink-500 mt-1.5 flex items-baseline gap-2">
-                      <span>截止 {formatDate(m.deadline)}</span>
+                    <div className="text-sm mt-1.5 flex items-baseline gap-2">
+                      <span className="text-red-600 dark:text-red-400 font-medium">
+                        截止 {formatDate(m.deadline)}
+                      </span>
                       <CountdownPill date={m.deadline} />
                     </div>
                   )}
