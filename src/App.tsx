@@ -42,6 +42,7 @@ export default function App() {
           apiKey,
           provider,
           model,
+          onProgress: (msg) => setStage(msg),
         });
 
         const needsResearch =

@@ -402,6 +402,47 @@ export interface ExtractOptions {
   provider?: Provider;
   model?: string;
   signal?: AbortSignal;
+  /** Called when the chain falls back to a different model or sleeps for a
+   * retry, so the UI can keep the user informed instead of looking frozen. */
+  onProgress?: (message: string) => void;
+}
+
+/** HTTP statuses that mean "try again later or with a different model". */
+const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const MAX_RETRIES_PER_MODEL = 2;
+
+class TransientLLMError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = "TransientLLMError";
+  }
+}
+
+function isTransientError(err: unknown): boolean {
+  if (err instanceof TransientLLMError) return true;
+  // fetch() throws TypeError on network failure / DNS / CORS preflight
+  if (
+    err instanceof TypeError &&
+    /failed to fetch|networkerror|load failed/i.test(err.message)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException("Aborted", "AbortError"));
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException("Aborted", "AbortError"));
+      },
+      { once: true },
+    );
+  });
 }
 
 export async function extractOffer(
@@ -410,8 +451,76 @@ export async function extractOffer(
 ): Promise<ExtractedOffer> {
   const provider = opts.provider ?? DEFAULT_PROVIDER;
   const config = PROVIDERS[provider];
-  const model = opts.model || config.defaultModel;
+  const userModel = opts.model || config.defaultModel;
 
+  // Try the user's chosen model first, then escalate through siblings on the
+  // same provider when the chosen one is overloaded / rate-limited. Each model
+  // sits in its own quota bucket (e.g. gemini-2.5-flash vs flash-lite), so this
+  // genuinely buys availability without changing the user's API key.
+  const fallbackChain = [
+    userModel,
+    ...config.models.map((m) => m.id).filter((m) => m !== userModel),
+  ];
+
+  let lastError: unknown = null;
+  for (let i = 0; i < fallbackChain.length; i++) {
+    const model = fallbackChain[i];
+    if (i > 0) {
+      const label = config.models.find((m) => m.id === model)?.label ?? model;
+      opts.onProgress?.(`上一个模型暂不可用，已切到 ${label}…`);
+    }
+    try {
+      return await extractWithRetry(input, opts, provider, config, model);
+    } catch (err) {
+      lastError = err;
+      if (!isTransientError(err)) throw err;
+      // try the next sibling model
+    }
+  }
+
+  if (lastError instanceof TransientLLMError) {
+    throw new Error(
+      `${PROVIDERS[provider] === PROVIDERS.google ? "Google AI Studio" : "OpenRouter"} 上能用的模型都暂时拥堵或限流（最后状态 ${lastError.status}）。请稍后重试，或在右上角「设置」中换一家服务商。`,
+    );
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("All models exhausted");
+}
+
+async function extractWithRetry(
+  input: ParsedInput,
+  opts: ExtractOptions,
+  provider: Provider,
+  config: ProviderConfig,
+  model: string,
+): Promise<ExtractedOffer> {
+  let delayMs = 800;
+  for (let attempt = 0; attempt <= MAX_RETRIES_PER_MODEL; attempt++) {
+    try {
+      return await extractOnce(input, opts, provider, config, model);
+    } catch (err) {
+      if (!isTransientError(err) || attempt === MAX_RETRIES_PER_MODEL) {
+        throw err;
+      }
+      const wait = delayMs + Math.floor(Math.random() * 250);
+      const status =
+        err instanceof TransientLLMError ? `${err.status} ` : "";
+      opts.onProgress?.(`${status}稍等再试…（${Math.round(wait / 100) / 10}s）`);
+      await sleep(wait, opts.signal);
+      delayMs *= 2;
+    }
+  }
+  throw new Error("unreachable");
+}
+
+async function extractOnce(
+  input: ParsedInput,
+  opts: ExtractOptions,
+  provider: Provider,
+  config: ProviderConfig,
+  model: string,
+): Promise<ExtractedOffer> {
   const userContent: Array<
     { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
   > = [];
@@ -454,14 +563,21 @@ export async function extractOffer(
 
   if (!res.ok) {
     const body = await res.text();
-    if (res.status === 429) {
-      throw new Error(
-        `今日 ${provider === "google" ? "Google AI Studio" : "OpenRouter"} 免费层额度已用完。可在右上角「设置」中切到 Gemini 2.5 Flash-Lite（额度更高），或明天再试。`,
-      );
-    }
     if (res.status === 401 || res.status === 403) {
       throw new Error(
         "API key 无效或被拒绝。请在右上角「设置」中确认 key 正确，并已启用对应模型权限。",
+      );
+    }
+    if (RETRYABLE_STATUS.has(res.status)) {
+      const reason =
+        res.status === 429
+          ? "额度或并发限流"
+          : res.status === 503
+          ? "模型当前拥堵"
+          : `临时错误 ${res.status}`;
+      throw new TransientLLMError(
+        res.status,
+        `${reason}（${provider} / ${model}）`,
       );
     }
     throw new Error(`LLM request failed (${res.status}): ${body.slice(0, 300)}`);
@@ -615,25 +731,7 @@ export async function researchOffer(
     `https://generativelanguage.googleapis.com/v1beta/models/${RESEARCH_SUPPORTED_MODEL}:generateContent` +
     `?key=${encodeURIComponent(opts.apiKey)}`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    signal: opts.signal,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      tools: [{ google_search: {} }],
-      generationConfig: { temperature: 0.1 },
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(
-      `Research request failed (${res.status}): ${body.slice(0, 300)}`,
-    );
-  }
-
-  const json = await res.json();
+  const json = await researchFetchWithRetry(url, prompt, opts.signal);
   const text: string =
     json?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ??
     "";
@@ -666,6 +764,54 @@ export async function researchOffer(
         : undefined,
     sources: groundedSources,
   };
+}
+
+async function researchFetchWithRetry(
+  url: string,
+  prompt: string,
+  signal?: AbortSignal,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  let delayMs = 800;
+  for (let attempt = 0; attempt <= MAX_RETRIES_PER_MODEL; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          tools: [{ google_search: {} }],
+          generationConfig: { temperature: 0.1 },
+        }),
+      });
+      if (res.ok) return await res.json();
+      const body = await res.text();
+      if (
+        RETRYABLE_STATUS.has(res.status) &&
+        attempt < MAX_RETRIES_PER_MODEL
+      ) {
+        throw new TransientLLMError(
+          res.status,
+          `Research transient (${res.status})`,
+        );
+      }
+      throw new Error(
+        `Research request failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    } catch (err) {
+      if (
+        (isTransientError(err)) &&
+        attempt < MAX_RETRIES_PER_MODEL
+      ) {
+        await sleep(delayMs + Math.floor(Math.random() * 250), signal);
+        delayMs *= 2;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("unreachable");
 }
 
 function withVerifiedSource<T extends { source?: unknown }>(
