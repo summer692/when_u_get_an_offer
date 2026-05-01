@@ -9,7 +9,9 @@ export async function exportNodeToImage(
   filename: string,
 ): Promise<ExportResult> {
   const dataUrl = await toPng(node, {
-    pixelRatio: 2,
+    // Internal card is 720×1280 (9:16). 1.5× pixel ratio yields a clean
+    // 1080×1920 PNG — the standard mobile-portrait poster size.
+    pixelRatio: 1.5,
     cacheBust: true,
     backgroundColor: "#FFFFFF",
   });

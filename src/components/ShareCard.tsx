@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+import { forwardRef, useLayoutEffect, useRef, useState } from "react";
 import type { Money, MustDo, Offer } from "../lib/schema";
 import { formatDate, formatMoney } from "../lib/format";
 
@@ -9,13 +9,17 @@ interface Props {
 }
 
 const W = 720;
-// Lock to iPhone full-screen aspect (9:19.5). The exported PNG is the same
-// shape every time, regardless of how much an offer has to say. Footer is
-// pinned to the bottom via marginTop:auto so short offers don't leave a void;
-// content past the bottom edge is clipped (overflow:hidden) on the rare
-// content-heavy offer.
-const H = 1560;
+// Frame is always 9:16 — exports to exactly 1080×1920 with pixelRatio 1.5.
+// Content that overflows the natural 1280 height is uniformly scaled down
+// (font, padding, line-height all together) so the whole offer still fits
+// without clipping, just at a tighter density.
+const H = 1280;
 const PAD_X = 64;
+const PAD_T = 56;
+const PAD_B = 48;
+// Floor on auto-shrink. Below ~0.6 body text drops under 10pt and stops
+// being legible at phone-screen viewing distance.
+const MIN_SCALE = 0.6;
 
 // Editorial monochrome: white page, near-black ink. The shareable image is
 // meant to give the student a one-glance read of what their offer requires,
@@ -48,6 +52,21 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
     termStartDate ? formatDate(termStartDate) : offer.term_start_text || null;
   const todos = sortedTodos(offer.must_do ?? []);
 
+  // Auto-fit: render inner at natural size, measure scrollHeight, scale the
+  // whole inner uniformly when it overflows the 1280 frame. Layout box is
+  // unchanged by transform, so scrollHeight stays stable across renders and
+  // the loop converges in one pass.
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    if (!innerRef.current) return;
+    const naturalH = innerRef.current.scrollHeight;
+    const next =
+      naturalH <= H ? 1 : Math.max(MIN_SCALE, H / naturalH);
+    setScale((prev) => (Math.abs(prev - next) > 0.005 ? next : prev));
+  });
+
   return (
     <div
       ref={ref}
@@ -55,18 +74,27 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         width: W,
         height: H,
         backgroundColor: BG,
-        color: INK,
-        fontFamily: fontStack,
-        padding: `56px ${PAD_X}px 48px`,
-        boxSizing: "border-box",
-        WebkitFontSmoothing: "antialiased",
-        letterSpacing: 0,
-        position: "relative",
-        display: "flex",
-        flexDirection: "column",
         overflow: "hidden",
+        position: "relative",
       }}
     >
+      <div
+        ref={innerRef}
+        style={{
+          width: W,
+          minHeight: H,
+          color: INK,
+          fontFamily: fontStack,
+          padding: `${PAD_T}px ${PAD_X}px ${PAD_B}px`,
+          boxSizing: "border-box",
+          WebkitFontSmoothing: "antialiased",
+          letterSpacing: 0,
+          display: "flex",
+          flexDirection: "column",
+          transform: `scale(${scale})`,
+          transformOrigin: "0 0",
+        }}
+      >
       {/* Brand strip — country left, agency right, separated by hairline */}
       <div
         style={{
@@ -307,6 +335,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           {agencyName ? `Curated by ${agencyName}` : "Curated by OfferLens"}
         </span>
         <span style={{ fontVariantNumeric: "tabular-nums" }}>{dateStamp}</span>
+      </div>
       </div>
     </div>
   );
