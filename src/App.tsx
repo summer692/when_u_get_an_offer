@@ -37,12 +37,17 @@ export default function App() {
       try {
         setError(null);
         const { apiKey, provider, model } = await ensureKey();
-        setStage("正在读取 offer…");
+        setStage("OfferLens 阅读中，请站在此地不要动......");
         let extracted: ExtractedOffer = await extractOffer(input, {
           apiKey,
           provider,
           model,
-          onProgress: (msg) => setStage(msg),
+          // Surface only cache hits to the user (it's a near-instant result,
+          // worth telling them); silently swallow fallback / retry chatter
+          // so the spinner copy stays calm and consistent.
+          onProgress: (msg) => {
+            if (msg.startsWith("命中")) setStage(msg);
+          },
         });
 
         const needsResearch =
@@ -52,7 +57,7 @@ export default function App() {
           !extracted.fees?.tuition;
 
         if (needsResearch && provider === "google") {
-          setStage(`正在查 ${extracted.school} 官网补全…`);
+          setStage("OfferLens 正在查官网补全，再坚持一下......");
           try {
             const research = await researchOffer(extracted, { apiKey });
             if (research) extracted = applyResearch(extracted, research);
@@ -61,7 +66,7 @@ export default function App() {
           }
         }
 
-        setStage("保存中…");
+        setStage("快好了，保存中......");
         const now = Date.now();
         const offer: Offer = {
           ...extracted,
