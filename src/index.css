@@ -73,7 +73,7 @@
   }
 
   .section-label {
-    @apply text-[11px] uppercase tracking-[0.22em] text-ink-500 font-medium;
+    @apply text-[13px] uppercase tracking-[0.22em] text-ink-500 font-semibold;
   }
 
   /* Hairline rule used as section divider */

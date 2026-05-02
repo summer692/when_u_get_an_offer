@@ -366,10 +366,10 @@ function Spec({
     <div>
       <div
         style={{
-          fontSize: 12,
+          fontSize: 14,
           color: SUB,
           textTransform: "uppercase",
-          letterSpacing: "0.24em",
+          letterSpacing: "0.22em",
           fontWeight: 600,
           marginBottom: 10,
         }}
@@ -401,10 +401,10 @@ function Fee({ label, money }: { label: string; money?: Money | null }) {
     <div>
       <div
         style={{
-          fontSize: 12,
+          fontSize: 14,
           color: SUB,
           textTransform: "uppercase",
-          letterSpacing: "0.24em",
+          letterSpacing: "0.22em",
           fontWeight: 600,
           marginBottom: 12,
         }}
@@ -451,8 +451,8 @@ function Section({
     <section style={{ marginTop: 32 }}>
       <h2
         style={{
-          fontSize: 14,
-          letterSpacing: "0.24em",
+          fontSize: 16,
+          letterSpacing: "0.22em",
           textTransform: "uppercase",
           color: INK,
           fontWeight: 600,

@@ -675,7 +675,7 @@ function Fact({
 }) {
   return (
     <div className="py-5 flex items-baseline gap-8">
-      <div className="text-sm text-ink-500 w-24 shrink-0 tracking-wide">
+      <div className="text-base font-medium text-ink-700 dark:text-ink-300 w-28 shrink-0 tracking-wide">
         {label}
       </div>
       <div className="flex-1 min-w-0">
