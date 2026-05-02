@@ -176,11 +176,30 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
       <div className="rule mb-12" />
 
       {offer.summary && (
-        <Section label="AI 解读">
-          <p className="text-base md:text-lg leading-loose tracking-tight whitespace-pre-line">
-            {offer.summary}
-          </p>
-        </Section>
+        <section className="mb-20">
+          <div className="flex items-baseline justify-between mb-6">
+            <h2 className="section-label">发给学生</h2>
+            <button
+              onClick={async () => {
+                if (!offer.summary) return;
+                try {
+                  await navigator.clipboard.writeText(offer.summary);
+                  flashToast("已复制，可粘贴发学生");
+                } catch {
+                  flashToast("复制失败，请手动选择文本", 2400);
+                }
+              }}
+              className="text-xs px-3 py-1.5 rounded-full border border-ink-200 dark:border-ink-700 hover:border-ink-900 dark:hover:border-white transition-colors"
+            >
+              复制全文
+            </button>
+          </div>
+          <div className="card p-7 md:p-9">
+            <p className="text-[15px] md:text-base leading-[1.85] whitespace-pre-line">
+              {offer.summary}
+            </p>
+          </div>
+        </section>
       )}
 
       <Section label="基本信息">
