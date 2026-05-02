@@ -197,11 +197,11 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         <div
           data-chrome="caption"
           style={{
-            marginTop: 18,
+            marginTop: 14,
             fontSize: 14,
             color: SUB,
             letterSpacing: "0.02em",
-            lineHeight: 1.5,
+            lineHeight: 1.4,
             textAlign: "center",
           }}
         >
@@ -212,7 +212,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
 
       {showHero && <div data-chrome="hero">
       {/* Greeting */}
-      <div style={{ marginTop: 36, marginBottom: 22 }}>
+      <div style={{ marginTop: 24, marginBottom: 14 }}>
         <div
           style={{
             fontSize: 22,
@@ -243,7 +243,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       {schoolZh !== offer.school && (
         <div
           style={{
-            marginTop: 12,
+            marginTop: 8,
             fontSize: 13,
             color: MUTE,
             letterSpacing: "0.08em",
@@ -256,7 +256,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       )}
 
       {/* Programme as keynote subtitle */}
-      <div style={{ marginTop: 24 }}>
+      <div style={{ marginTop: 16 }}>
         <div
           style={{
             fontSize: 24,
@@ -287,9 +287,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       {showSpecs && <div
         data-section="specs"
         style={{
-          marginTop: 32,
-          paddingTop: 18,
-          paddingBottom: 18,
+          marginTop: 22,
+          paddingTop: 13,
+          paddingBottom: 13,
           borderTop: `1px solid ${HAIRLINE}`,
           borderBottom: `1px solid ${HAIRLINE}`,
           display: "grid",
@@ -309,8 +309,8 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       {showFees && <div
         data-section="fees"
         style={{
-          marginTop: 18,
-          paddingBottom: 22,
+          marginTop: 12,
+          paddingBottom: 16,
           borderBottom: `1px solid ${HAIRLINE}`,
           display: "grid",
           gridTemplateColumns: "1fr 1fr 1fr",
@@ -366,10 +366,10 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
                 style={{
                   fontSize: 15,
                   color: INK,
-                  lineHeight: 1.6,
+                  lineHeight: 1.4,
                   paddingLeft: 20,
                   position: "relative",
-                  marginTop: i === 0 ? 0 : 10,
+                  marginTop: i === 0 ? 0 : 7,
                   textAlign: "left",
                 }}
               >
@@ -522,7 +522,7 @@ function Section({
   dataId?: string;
 }) {
   return (
-    <section data-section={dataId} style={{ marginTop: 32 }}>
+    <section data-section={dataId} style={{ marginTop: 22 }}>
       <h2
         style={{
           fontSize: 16,
@@ -531,7 +531,7 @@ function Section({
           color: INK,
           fontWeight: 600,
           marginTop: 0,
-          marginBottom: 16,
+          marginBottom: 11,
         }}
       >
         {title}
@@ -562,7 +562,7 @@ function ListItem({
         display: "flex",
         alignItems: "baseline",
         gap: 18,
-        padding: "10px 0",
+        padding: "7px 0",
         borderBottom: isLast ? "none" : `1px solid ${HAIRLINE}`,
         textAlign: "left",
       }}
@@ -583,7 +583,7 @@ function ListItem({
         <div
           style={{
             fontSize: 16,
-            lineHeight: 1.5,
+            lineHeight: 1.4,
             color: INK,
             fontWeight: emphasis ? 600 : 400,
             letterSpacing: "-0.005em",
@@ -596,8 +596,8 @@ function ListItem({
             style={{
               fontSize: 14,
               color: SUB,
-              marginTop: 8,
-              lineHeight: 1.65,
+              marginTop: 6,
+              lineHeight: 1.45,
               whiteSpace: "pre-line",
             }}
           >
@@ -609,8 +609,8 @@ function ListItem({
             style={{
               fontSize: 16,
               color: DATE_RED,
-              marginTop: 8,
-              lineHeight: 1.5,
+              marginTop: 6,
+              lineHeight: 1.35,
               fontWeight: 600,
             }}
           >

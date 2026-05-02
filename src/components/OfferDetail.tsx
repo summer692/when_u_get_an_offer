@@ -17,6 +17,14 @@ interface DraftState {
   notes?: string[];
 }
 
+const SECTION_LABEL: Record<SectionId, string> = {
+  specs: "基本信息",
+  fees: "费用",
+  conditions: "录取条件",
+  todos: "接下来你要做的",
+  notes: "重要备注",
+};
+
 interface Props {
   offer: Offer;
   onBack: () => void;
@@ -37,6 +45,8 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   const [pageAssignments, setPageAssignments] = useState<SectionId[][]>([
     [...ALL_SECTIONS],
   ]);
+  // Sections that got pushed to P2+ — used to populate the "建议精简" banner.
+  const [overflowedSections, setOverflowedSections] = useState<SectionId[]>([]);
 
   function scrollToFees() {
     feesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -81,11 +91,15 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     setDurationDraft(offer.duration ?? "");
   }, [offer.duration]);
 
-  // Greedy page packer: render every section in a hidden measurement card,
-  // measure each section's natural height + the chrome (brand strip / hero /
-  // caption / footer), then walk the section list in order and start a new
-  // page only when the next section won't fit on the current one. The hero
-  // is fixed to page 1; pages 2+ have a slim caption instead.
+  // Page packer — "fit P1 first, push from bottom" strategy:
+  // 1. Try fitting every visible section on P1 (specs / fees / 录取条件 /
+  //    接下来你要做的 / 重要备注).
+  // 2. If P1 overflows, evict sections from the bottom in priority order
+  //    (notes → todos → conditions). 基本信息 (specs + fees) is locked.
+  // 3. Pulled sections form P2's contents in their original display order.
+  //    If P2 alone overflows, greedy-fit them into P3+ at section level.
+  //    (Per-page auto-scale stays as the safety net for pathologically big
+  //    single sections.)
   useLayoutEffect(() => {
     const node = measureRef.current;
     if (!node) return;
@@ -105,54 +119,86 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     const captionH = getBoxHeight('[data-chrome="caption"]');
     const footerH = getBoxHeight('[data-chrome="footer"]');
 
-    const sectionHeights: Partial<Record<SectionId, number>> = {};
+    const heights: Partial<Record<SectionId, number>> = {};
     for (const id of ALL_SECTIONS) {
-      sectionHeights[id] = getBoxHeight(`[data-section="${id}"]`);
+      heights[id] = getBoxHeight(`[data-section="${id}"]`);
     }
 
-    // Internal coords are 720×1280 (×1.5 → 1080×1920). Translate to output
-    // pixels for the console log so the numbers match the user's mental
-    // model of "1920-tall canvas".
     const FRAME_INTERIOR = 1280 - 56 - 48; // PAD_T + PAD_B
-    const HAIRLINE = 1; // the strong hairline between brand strip & content
+    const HAIRLINE = 1;
     const PAGE1_AVAIL = FRAME_INTERIOR - brandH - HAIRLINE - heroH - footerH;
     const PAGEN_AVAIL = FRAME_INTERIOR - brandH - HAIRLINE - captionH - footerH;
     const toOut = (n: number) => Math.round(n * 1.5);
 
-    const visible = ALL_SECTIONS.filter((id) => (sectionHeights[id] ?? 0) > 0);
+    const visible = ALL_SECTIONS.filter((id) => (heights[id] ?? 0) > 0);
     if (visible.length === 0) {
       setPageAssignments([[]]);
       return;
     }
 
-    const pages: SectionId[][] = [[]];
-    let used = 0;
-    let pageIdx = 0;
-    let avail = PAGE1_AVAIL;
+    const sumH = (ids: SectionId[]) =>
+      ids.reduce((s, id) => s + (heights[id] ?? 0), 0);
 
     console.log(
       `📄 拆页测量｜brand ${toOut(brandH)} · hero ${toOut(heroH)} · caption ${toOut(captionH)} · footer ${toOut(footerH)} → p1 可用 ${toOut(PAGE1_AVAIL)}px / p2+ 可用 ${toOut(PAGEN_AVAIL)}px`,
     );
+    console.log(
+      `📄 各 section 高度｜${visible.map((id) => `${id} ${toOut(heights[id] ?? 0)}px`).join(" · ")}`,
+    );
 
-    for (const id of visible) {
-      const h = sectionHeights[id] ?? 0;
-      const fits = used + h <= avail;
-      const verdict = fits
-        ? "是"
-        : pages[pageIdx].length > 0
-        ? "否，换页"
-        : "否（已在空页起点，强制放入，由 auto-scale 兜底）";
+    // Step 1: try all on P1
+    const lockedToP1: SectionId[] = ["specs", "fees"];
+    const pullable: SectionId[] = ["conditions", "todos", "notes"];
+
+    let p1Sections = visible.slice();
+    const pulled: SectionId[] = [];
+
+    if (sumH(p1Sections) <= PAGE1_AVAIL) {
       console.log(
-        `p${pageIdx + 1} 累计 ${toOut(used)}px / 可用 ${toOut(avail)}px → 还能塞下"${id}"(${toOut(h)}px)? ${verdict}`,
+        `p1 全部内容总高 ${toOut(sumH(p1Sections))}px ≤ 可用 ${toOut(PAGE1_AVAIL)}px → 一页装下`,
       );
-      if (!fits && pages[pageIdx].length > 0) {
-        pageIdx++;
-        pages.push([]);
-        avail = PAGEN_AVAIL;
-        used = 0;
+    } else {
+      console.log(
+        `p1 全部内容总高 ${toOut(sumH(p1Sections))}px > 可用 ${toOut(PAGE1_AVAIL)}px → 开始从底部弹出`,
+      );
+      // Step 2: evict from bottom by priority (notes → todos → conditions)
+      for (const id of [...pullable].reverse()) {
+        if (sumH(p1Sections) <= PAGE1_AVAIL) break;
+        if (!p1Sections.includes(id)) continue;
+        if (lockedToP1.includes(id)) continue;
+        p1Sections = p1Sections.filter((x) => x !== id);
+        pulled.unshift(id); // keep display order
+        console.log(
+          `→ 弹出 ${id}，p1 剩余高 ${toOut(sumH(p1Sections))}px / 可用 ${toOut(PAGE1_AVAIL)}px`,
+        );
       }
-      pages[pageIdx].push(id);
-      used += h;
+    }
+
+    // Step 3: pack pulled sections onto P2+
+    const pages: SectionId[][] = [p1Sections];
+    if (pulled.length > 0) {
+      let pageIdx = 1;
+      pages.push([]);
+      let used = 0;
+      for (const id of pulled) {
+        const h = heights[id] ?? 0;
+        const fits = used + h <= PAGEN_AVAIL;
+        const verdict = fits
+          ? "是"
+          : pages[pageIdx].length > 0
+          ? "否，p" + (pageIdx + 2) + "新页"
+          : "否（页面起点，强制放入；超大段落由 auto-scale 兜底）";
+        console.log(
+          `p${pageIdx + 1} 累计 ${toOut(used)}px / 可用 ${toOut(PAGEN_AVAIL)}px → 还能塞下"${id}"(${toOut(h)}px)? ${verdict}`,
+        );
+        if (!fits && pages[pageIdx].length > 0) {
+          pageIdx++;
+          pages.push([]);
+          used = 0;
+        }
+        pages[pageIdx].push(id);
+        used += h;
+      }
     }
 
     console.log(
@@ -160,6 +206,11 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         .map((p, i) => `p${i + 1}=[${p.join(", ")}]`)
         .join(" | ")}`,
     );
+
+    setOverflowedSections((prev) => {
+      const arrEq = prev.length === pulled.length && prev.every((s, i) => s === pulled[i]);
+      return arrEq ? prev : pulled;
+    });
 
     setPageAssignments((prev) => {
       // Avoid re-rendering when assignments are equal (prevents loop on
@@ -357,6 +408,32 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
           {exporting ? "生成中…" : "导出分享图"}
         </button>
       </div>
+
+      {pageAssignments.length > 1 && (
+        <div className="mb-12 rounded-card border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/40 p-5 text-sm">
+          <div className="flex items-baseline gap-3 mb-2 text-amber-900 dark:text-amber-100">
+            <span className="text-base">⚠️</span>
+            <span>
+              内容超出一页，已自动拆为 <b>{pageAssignments.length}</b> 张 PNG。
+              {overflowedSections.length > 0 && (
+                <>
+                  {" "}建议在编辑模式下精简：
+                  <b>
+                    {overflowedSections
+                      .map((id) => SECTION_LABEL[id])
+                      .join("、")}
+                  </b>
+                </>
+              )}
+            </span>
+          </div>
+          <div className="text-xs text-amber-700/80 dark:text-amber-300/80 ml-7">
+            点对应分组的「编辑」按钮删几条/精简文字 → 重新点「确认修改」 →
+            重新「导出分享图」即可压回一页。或者直接接受多页结果（p1
+            是核心摘要主图，多数学生只会看这张）。
+          </div>
+        </div>
+      )}
 
       <header className="mb-20">
         <div className="section-label mb-10">
