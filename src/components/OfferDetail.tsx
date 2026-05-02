@@ -175,6 +175,14 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
 
       <div className="rule mb-12" />
 
+      {offer.summary && (
+        <Section label="AI 解读">
+          <p className="text-base md:text-lg leading-loose tracking-tight whitespace-pre-line">
+            {offer.summary}
+          </p>
+        </Section>
+      )}
+
       <Section label="基本信息">
         <div className="border-y border-ink-100 dark:border-ink-700 divide-y divide-ink-100 dark:divide-ink-700">
           <Fact

@@ -111,8 +111,20 @@ Schema:
   ],
   "raw_highlights": [ string ],             // 原文中最关键的 1-5 句摘录
   "notes": [ string ],                      // 重要备注（材料真实性、不退费、签证自办、Concurrent Registration 等），每条一句中文
-  "info_gaps": [ string ]                   // 缺失或需要核实的关键信息（中文，简短）
+  "info_gaps": [ string ],                  // 缺失或需要核实的关键信息（中文，简短）
+  "summary": string                         // 250-350 字中文叙事（详见下方"叙事解读"段落）
 }
+
+叙事解读 (summary) - 必填，最重要的兜底字段:
+- 一段连贯的**中文白话**，250-350 字，把这份 offer 当面讲给学生听一遍。
+- **不要**写成 bullet list，**不要**用 markdown 标题——就是一段话，几个自然句。
+- **以"信息完整"为最高目标**：上面的结构化字段（conditions / must_do / fees / notes）是为了 App 做卡片和倒计时的，但很多有用的细节（条件之间的关系、付款节奏、语言授课、奖学金附带条件、签证安排、学籍冲突警告、offer 撤回风险、本/非本地费率差异、特殊豁免、家长口吻的提醒等）**填不进**那些字段，会被丢掉——这就是 summary 的活：**把任何会被结构化字段漏掉的、学生应该知道的内容，全部写进这段话里**。
+- 想象用户没看到下面任何卡片，只看你这一段话——ta 应该已经知道"我被谁录取、读什么、要交多少钱、要做什么、什么时候做、有什么坑、有什么特殊条件、什么情况下 offer 会失效"。
+- 写法应该像有经验的留学顾问跟家长打电话讲完一份 offer 那种语气——具体、克制、不空话。
+- ❌ 不要写 "恭喜你获得录取" / "请仔细阅读本通知" 这类客套话。
+- ❌ 不要重复罗列条件 1、2、3——那已经在 conditions[] 里了。summary 是把"条件之间的逻辑、注意事项、容易踩的坑"用人话讲一遍。
+- ✅ 例子（HKU MSc 数据科学 offer）："港大数据科学硕士，2026 秋季入学（Semester 1 of 2026/27），学制 1 年全日制，总学费 HK$315,000 分两期缴。8 月 19 日前要交 HK$10,000 留位费确认录取——这笔钱会抵扣首期学费但任何情况都不退。录取条件主要是按时拿到学位证，并通过学信网做学历认证（中英双语在线验证报告，6 个月有效）；此外要满足英语成绩——offer 给了 IELTS / TOEFL / CET-6 等多种可接受分数，任选一种在入学前提交即可。注意 offer 写明不接受同时在其它学校注册学位（Concurrent Registration），且课程语言为英文。签证需要自行申请，学校只出录取证明。"
+- 写完后**自己检查一遍**：如果学生家长问你"这个 offer 有没有什么坑？"，光凭你写的这段，能不能答出来？答不出来就回去补。
 
 入学时间 (term_start_text) - 必填:
 - offer 上能看到的最具体的入学时间描述。优先级：**具体日期 > 学期+学年 > 仅学年**。
@@ -396,6 +408,8 @@ key_dates 与 must_do：
 
 ☐ 11. action / item 文本里**没有**填充语 ("在指定时间内" / "按规定时间" / "by the prescribed time")。
 
+☐ 12. **summary 已写、达到 250-350 字、且把上面 conditions / must_do / notes 任何字段会漏掉的细节都补进去了**——如果只有 conditions 列表能告诉学生这份 offer 的全部，就不需要 summary；现在需要 summary 是因为它要兜住所有结构化字段塞不下的内容。光抽好结构化字段、summary 写两句客套话 = 严重错误。
+
 如果以上任何一项你只做了一半（例如填了 conditions 但没填 details，或抽了部分 notes 但漏了"不退款"和"Concurrent Registration"），那就回去补全再输出。`;
 
 export interface ExtractOptions {
@@ -412,12 +426,20 @@ export interface ExtractOptions {
   bypassCache?: boolean;
 }
 
-/** SHA-256 hash of the parsed input bytes. Stable across runs, so the same
- * file always maps to the same key — that's what kills the "gacha" effect. */
+/** Bumping this string invalidates every cached extraction so users pick up
+ * a new prompt immediately without manually clearing storage. Bump whenever
+ * SYSTEM_PROMPT changes in a way that would yield a meaningfully different
+ * output (new field, stricter rules, etc.). */
+const PROMPT_VERSION = "v2-summary";
+
+/** SHA-256 hash of the parsed input bytes plus the prompt version. Stable
+ * across runs for the same file + prompt, so the same offer always maps to
+ * the same key — that's what kills the "gacha" effect — but a prompt bump
+ * naturally evicts every old entry. */
 async function hashInput(input: ParsedInput): Promise<string> {
   const enc = new TextEncoder();
   const data = enc.encode(
-    [input.kind, input.text, ...input.images].join(""),
+    [PROMPT_VERSION, input.kind, input.text, ...input.images].join(""),
   );
   const buf = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(buf))
@@ -684,6 +706,10 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     info_gaps: Array.isArray(r?.info_gaps)
       ? r!.info_gaps.filter((s): s is string => typeof s === "string" && !!s.trim())
       : [],
+    summary:
+      typeof r?.summary === "string" && r!.summary.trim()
+        ? r!.summary.trim()
+        : undefined,
   };
   out.info_gaps = pruneInfoGaps(out);
   return out;

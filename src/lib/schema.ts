@@ -104,6 +104,13 @@ export interface ExtractedOffer {
   /** Short Chinese notes describing critical info that is missing, partial,
    * or that the user should verify against the school's official website. */
   info_gaps?: string[];
+  /** A 250–350 character Chinese narrative that reads the offer the way a
+   * good agent would explain it to the student in a single breath. This is
+   * NOT a list — it's prose, written to capture everything important the
+   * student needs to know that the rigid schema would otherwise drop or
+   * truncate (tone, conditional warnings, payment quirks, language of
+   * instruction, special arrangements, scholarship strings attached, etc.). */
+  summary?: string;
 }
 
 export interface Offer extends ExtractedOffer {
