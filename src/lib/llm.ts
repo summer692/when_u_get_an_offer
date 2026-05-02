@@ -1,3 +1,4 @@
+import { jsonrepair } from "jsonrepair";
 import type { ExtractedOffer, Provider } from "./schema";
 import type { ParsedInput } from "./parsers";
 import { getCachedExtraction, saveCachedExtraction } from "./db";
@@ -708,18 +709,31 @@ async function extractOnce(
 }
 
 function safeJsonParse(text: string): unknown {
+  // Try strict parse first.
   try {
     return JSON.parse(text);
   } catch {
-    const match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (match) return JSON.parse(match[1]);
-    const first = text.indexOf("{");
-    const last = text.lastIndexOf("}");
-    if (first >= 0 && last > first) {
-      return JSON.parse(text.slice(first, last + 1));
-    }
-    throw new Error("Could not parse LLM JSON output");
+    /* fall through */
   }
+  // Some models wrap the JSON in ```json ... ``` despite the system prompt
+  // forbidding markdown — peel the fence and try again.
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) {
+    try {
+      return JSON.parse(fenced[1]);
+    } catch {
+      /* fall through to repair */
+    }
+  }
+  // Slice down to the outermost {...} window in case there's stray prose.
+  const first = text.indexOf("{");
+  const last = text.lastIndexOf("}");
+  const sliced =
+    first >= 0 && last > first ? text.slice(first, last + 1) : text;
+  // Last resort: jsonrepair handles the typical LLM mistakes that bite us
+  // with the long free-form `summary` field — unescaped quotes inside
+  // strings, raw newlines, single quotes, trailing commas, etc.
+  return JSON.parse(jsonrepair(sliced));
 }
 
 function normalizeExtracted(raw: unknown): ExtractedOffer {
