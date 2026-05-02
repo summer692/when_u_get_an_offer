@@ -57,7 +57,7 @@ export default function App() {
           !extracted.fees?.tuition;
 
         if (needsResearch && provider === "google") {
-          setStage("OfferLens 正在查官网补全，再坚持一下......");
+          setStage("OfferLens 正在查官网补全......");
           try {
             const research = await researchOffer(extracted, { apiKey });
             if (research) extracted = applyResearch(extracted, research);
