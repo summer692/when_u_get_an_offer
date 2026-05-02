@@ -90,9 +90,9 @@ Schema:
     }
   ],
   "fees": {
-    "tuition":     { "amount": number, "currency": string, "period": "year"|"term"|"total", "note": string|null, "is_partial": boolean } | null,
-    "deposit":     { "amount": number, "currency": string, "note": string|null } | null,
-    "scholarship": { "amount": number, "currency": string, "note": string } | null
+    "tuition":     { "amount": number, "currency": "HKD"|"USD"|"GBP"|"EUR"|"CNY"|"SGD"|"AUD"|"CAD"|"JPY"|"KRW", "period": "year"|"term"|"total", "note": string|null, "is_partial": boolean } | null,
+    "deposit":     { "amount": number, "currency": "HKD"|"USD"|"GBP"|"EUR"|"CNY"|"SGD"|"AUD"|"CAD"|"JPY"|"KRW", "note": string|null } | null,
+    "scholarship": { "amount": number, "currency": "HKD"|"USD"|"GBP"|"EUR"|"CNY"|"SGD"|"AUD"|"CAD"|"JPY"|"KRW", "note": string } | null
   } | null,
   "conditions": [
     {
@@ -355,6 +355,25 @@ conditions vs must_do（必须区分清楚，不要同一件事写在两处）�
 - **每一个具体日期**都必须出现在某个字段的 deadline 中（must_do.deadline / conditions.deadline / key_dates.date）。**漏掉任何一个具体日期都属于严重错误**。
 - 一份合格的输出，应该让用户仅看抽取结果就能知道"我什么时候要做什么"，而不需要再回去翻 offer 原文。
 
+币种 (currency) — 严格白名单:
+- **必须**输出下面 10 个三字母 ISO 代码之一，不允许任何其它写法：
+  HKD（港币）/ USD（美元）/ GBP（英镑）/ EUR（欧元）/ CNY（人民币）
+  SGD（新加坡元）/ AUD（澳元）/ CAD（加元）/ JPY（日元）/ KRW（韩元）
+- ❌ **绝对不要**输出 "RMB" / "Yuan" / "元" / "人民币" / "HK$" / "$" / "美金" / "港纸" / "Pounds" / "欧元" / "新币" / "澳币" / "韩币" / "$AUD" / "HK Dollar" 等任何非 ISO 写法。
+- 常见映射（offer 原文里的写法 → 你应该输出的代码）：
+  · "RMB" / "Yuan" / "元" / "人民币" / "￥" / "¥" + 中文金额 → CNY
+  · "HK$" / "HKD$" / "港币" / "港纸" / "Hong Kong Dollar" → HKD
+  · "$" / "US$" / "USD$" / "美金" / "美元" / "US Dollar" → USD
+  · "£" / "GBP£" / "英镑" / "Pounds Sterling" / "British Pound" → GBP
+  · "€" / "EUR€" / "欧元" / "Euros" → EUR
+  · "S$" / "SG$" / "Singapore Dollar" / "新币" / "新加坡元" → SGD
+  · "A$" / "AU$" / "AUD$" / "Aussie Dollar" / "澳元" / "澳币" → AUD
+  · "C$" / "CA$" / "Canadian Dollar" / "加元" / "加币" → CAD
+  · "JP¥" / "Japanese Yen" / "日元" / "日円" → JPY
+  · "₩" / "Korean Won" / "韩元" / "韩币" / "원" → KRW
+- "$" 单独出现时**必须**根据上下文判断（offer 学校所在国 / 文档其它地方的国家代码 / 抬头）：美国学校 → USD；港校 → HKD；澳校 → AUD；加校 → CAD；新校 → SGD。判断不出来时**优先用学校所在地**的币种。
+- 如果 offer 上的币种**完全不在**上述 10 个里（极罕见，比如瑞士法郎、瑞典克朗），把 currency 字段设为 null（不要硬塞一个最近的代码），并在 info_gaps 里加一句"币种 [原文] 不在常见 10 种之内，请人工确认"。
+
 学费抽取（**严格按以下优先级**，从高到低）：
 
 优先级 1 — offer 上**明确写出了"项目总学费"数字** → 直接采用，is_estimate=false：
@@ -476,7 +495,7 @@ export interface ExtractOptions {
  * a new prompt immediately without manually clearing storage. Bump whenever
  * SYSTEM_PROMPT changes in a way that would yield a meaningfully different
  * output (new field, stricter rules, etc.). */
-const PROMPT_VERSION = "v4-trust-levels";
+const PROMPT_VERSION = "v5-currency-whitelist";
 
 /** SHA-256 hash of the parsed input bytes plus the prompt version. Stable
  * across runs for the same file + prompt, so the same offer always maps to
@@ -755,7 +774,7 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     student_category: r?.student_category ?? undefined,
     term_start_text: r?.term_start_text ?? undefined,
     key_dates: Array.isArray(r?.key_dates) ? r!.key_dates : [],
-    fees: r?.fees ?? undefined,
+    fees: normalizeFees(r?.fees),
     conditions: Array.isArray(r?.conditions) ? r!.conditions : [],
     must_do: Array.isArray(r?.must_do) ? r!.must_do : [],
     raw_highlights: Array.isArray(r?.raw_highlights) ? r!.raw_highlights : [],
@@ -846,7 +865,7 @@ export async function researchOffer(
 3. 如果官网公布"项目总学费 X"（如 "HK$530,400 per programme"），直接使用 X。
 4. 如果官网只公布"per-credit Y"和"项目总学分要求 Z"，那么 amount = Z * Y；如果有 1-credit Academic Integrity 等明确不收学费的学分，请在乘法中扣除并在 note 里说明。
 5. **特别留意可能的减免规则**——学分豁免、奖学金内置折扣、首学期减免、本地 vs 非本地费率差异。看到 "fee waiver / exempt / non-tuition / scholarship-discounted" 字样时必须读完整段并反映到 amount 或 note。
-6. 学费必须明确币种 (HKD / USD / GBP 等三字母 ISO 代码)。
+6. 学费必须明确币种，**只能**输出以下 10 个三字母 ISO 代码之一：HKD / USD / GBP / EUR / CNY / SGD / AUD / CAD / JPY / KRW。**不要**输出 "RMB" / "Yuan" / "元" / "$" / "¥" / "£" / "S$" 等非 ISO 写法。
 7. 入学时间用于确认你查到的是该届新生的费率（如 2026/27 入学）。如果只能查到旧届费率，请在 note 里注明并返回 null amount，让用户自己核对。
 8. 如果搜不到具体数字，对应字段返回 null。**绝对不要编造**。
 
@@ -959,13 +978,117 @@ function withVerifiedSource<T extends { source?: unknown }>(
   return rest as T;
 }
 
+/** ISO codes the UI knows how to format. Keep in sync with format.ts
+ * CURRENCY_SYMBOLS and MoneyEditor's dropdown. */
+export const CURRENCY_WHITELIST = [
+  "HKD", "USD", "GBP", "EUR", "CNY",
+  "SGD", "AUD", "CAD", "JPY", "KRW",
+] as const;
+
+/** Map common non-ISO writeups the model might leak through (despite the
+ * prompt) to a canonical ISO code. Returns null when nothing matches. */
+function coerceCurrency(raw: string): string | null {
+  const norm = raw.trim().toUpperCase().replace(/\s+/g, "");
+  if (!norm) return null;
+  if ((CURRENCY_WHITELIST as readonly string[]).includes(norm)) return norm;
+  // Common aliases the LLM tends to fall back on.
+  const aliases: Record<string, string> = {
+    RMB: "CNY",
+    YUAN: "CNY",
+    "人民币": "CNY",
+    "元": "CNY",
+    "￥": "CNY",
+    "¥": "CNY",
+    "HK$": "HKD",
+    HKDOLLAR: "HKD",
+    "HONGKONGDOLLAR": "HKD",
+    "港币": "HKD",
+    "港元": "HKD",
+    "港纸": "HKD",
+    "US$": "USD",
+    USDOLLAR: "USD",
+    "美元": "USD",
+    "美金": "USD",
+    "$": "USD",
+    "£": "GBP",
+    POUND: "GBP",
+    POUNDS: "GBP",
+    STERLING: "GBP",
+    GBPOUND: "GBP",
+    "英镑": "GBP",
+    "€": "EUR",
+    EURO: "EUR",
+    EUROS: "EUR",
+    "欧元": "EUR",
+    "S$": "SGD",
+    SGDOLLAR: "SGD",
+    SINGAPOREDOLLAR: "SGD",
+    "新加坡元": "SGD",
+    "新币": "SGD",
+    "A$": "AUD",
+    "AU$": "AUD",
+    AUDOLLAR: "AUD",
+    AUSSIEDOLLAR: "AUD",
+    AUSTRALIANDOLLAR: "AUD",
+    "澳元": "AUD",
+    "澳币": "AUD",
+    "C$": "CAD",
+    "CA$": "CAD",
+    CANADIANDOLLAR: "CAD",
+    "加元": "CAD",
+    "加币": "CAD",
+    "JP¥": "JPY",
+    "JPY¥": "JPY",
+    YEN: "JPY",
+    JAPANESEYEN: "JPY",
+    "日元": "JPY",
+    "日円": "JPY",
+    "₩": "KRW",
+    WON: "KRW",
+    KOREANWON: "KRW",
+    "韩元": "KRW",
+    "韩币": "KRW",
+    "원": "KRW",
+  };
+  return aliases[norm] ?? null;
+}
+
 function cleanMoney<T extends { amount?: unknown; currency?: unknown }>(
   m: T | null | undefined,
 ): T | undefined {
   if (!m || typeof m !== "object") return undefined;
   if (typeof m.amount !== "number" || !Number.isFinite(m.amount)) return undefined;
   if (typeof m.currency !== "string" || !m.currency.trim()) return undefined;
-  return m;
+  const canonical = coerceCurrency(m.currency);
+  if (!canonical) return undefined;
+  return { ...m, currency: canonical };
+}
+
+/** Pass each Money field of fees through the currency coercer so a model
+ * that emits "RMB" / "$" / "人民币" still lands as a clean ISO code. */
+function normalizeFees(
+  fees: unknown,
+): ExtractedOffer["fees"] | undefined {
+  if (!fees || typeof fees !== "object") return undefined;
+  const f = fees as Partial<NonNullable<ExtractedOffer["fees"]>>;
+  function coerce<T extends { currency?: string } | undefined | null>(
+    slot: T,
+  ): T | undefined {
+    if (!slot || typeof slot !== "object") return undefined;
+    if (typeof slot.currency === "string") {
+      const canonical = coerceCurrency(slot.currency);
+      if (canonical) return { ...slot, currency: canonical };
+    }
+    return slot;
+  }
+  return {
+    tuition: coerce(f.tuition),
+    deposit: coerce(f.deposit),
+    scholarship: coerce(f.scholarship),
+    other: Array.isArray(f.other)
+      ? (f.other.map(coerce).filter(Boolean) as NonNullable<typeof f.other>)
+      : undefined,
+  };
 }
 
 /**
