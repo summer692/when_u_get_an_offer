@@ -17,13 +17,6 @@ interface DraftState {
   notes?: string[];
 }
 
-const SECTION_LABEL: Record<SectionId, string> = {
-  specs: "基本信息",
-  fees: "费用",
-  conditions: "录取条件",
-  todos: "接下来你要做的",
-  notes: "重要备注",
-};
 
 interface Props {
   offer: Offer;
@@ -45,8 +38,8 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   const [pageAssignments, setPageAssignments] = useState<SectionId[][]>([
     [...ALL_SECTIONS],
   ]);
-  // Sections that got pushed to P2+ — used to populate the "建议精简" banner.
-  const [overflowedSections, setOverflowedSections] = useState<SectionId[]>([]);
+  const [longMode, setLongMode] = useState(false);
+  const longCardRef = useRef<HTMLDivElement | null>(null);
 
   function scrollToFees() {
     feesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -207,11 +200,6 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         .join(" | ")}`,
     );
 
-    setOverflowedSections((prev) => {
-      const arrEq = prev.length === pulled.length && prev.every((s, i) => s === pulled[i]);
-      return arrEq ? prev : pulled;
-    });
-
     setPageAssignments((prev) => {
       // Avoid re-rendering when assignments are equal (prevents loop on
       // measurement re-runs caused by the resulting render).
@@ -234,10 +222,6 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
       flashToast("有未保存的修改，请先点「确认修改」再导出图片", 3500);
       return;
     }
-    const pages = cardRefs.current
-      .slice(0, pageAssignments.length)
-      .filter(Boolean) as HTMLDivElement[];
-    if (pages.length === 0) return;
     setExporting(true);
     try {
       const fresh = await getSettings();
@@ -245,22 +229,34 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
       await new Promise((r) => requestAnimationFrame(() => r(null)));
       const stamp = timestampStamp();
       const base = `offer_${safeFilename(schoolZh)}_${stamp}`;
-      let lastResultMode: "shared" | "downloaded" | null = null;
-      for (let i = 0; i < pages.length; i++) {
-        const filename =
-          pages.length === 1 ? `${base}.png` : `${base}_p${i + 1}.png`;
-        // Sequential — most browsers throttle multi-file shares / downloads
-        // when fired in parallel, and the user-visible result is identical.
-        const result = await exportNodeToImage(pages[i], filename);
-        lastResultMode = result.mode;
+
+      if (longMode) {
+        if (!longCardRef.current) return;
+        const filename = `${base}_long.png`;
+        const result = await exportNodeToImage(longCardRef.current, filename);
+        setToast(result.mode === "shared" ? "已分享长图" : "已保存长图");
+      } else {
+        const pages = cardRefs.current
+          .slice(0, pageAssignments.length)
+          .filter(Boolean) as HTMLDivElement[];
+        if (pages.length === 0) return;
+        let lastResultMode: "shared" | "downloaded" | null = null;
+        for (let i = 0; i < pages.length; i++) {
+          const filename =
+            pages.length === 1 ? `${base}.png` : `${base}_p${i + 1}.png`;
+          // Sequential — most browsers throttle multi-file shares / downloads
+          // when fired in parallel, and the user-visible result is identical.
+          const result = await exportNodeToImage(pages[i], filename);
+          lastResultMode = result.mode;
+        }
+        setToast(
+          pages.length === 1
+            ? lastResultMode === "shared"
+              ? "已分享"
+              : "已保存图片"
+            : `已保存 ${pages.length} 张图片`,
+        );
       }
-      setToast(
-        pages.length === 1
-          ? lastResultMode === "shared"
-            ? "已分享"
-            : "已保存图片"
-          : `已保存 ${pages.length} 张图片（p1 是核心摘要主图）`,
-      );
     } catch (err) {
       console.error(err);
       setToast("导出失败，请重试");
@@ -396,42 +392,33 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
 
   return (
     <div className="fade-up max-w-4xl mx-auto px-6 py-10">
-      <div className="flex items-center justify-between mb-16">
+      <div className="flex items-center justify-between mb-16 gap-4">
         <button onClick={onBack} className="btn-ghost -ml-3">
           ← 返回
         </button>
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="btn-primary disabled:opacity-60"
-        >
-          {exporting ? "生成中…" : "导出分享图"}
-        </button>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-ink-500 hover:text-ink-900 dark:hover:text-white cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={longMode}
+              onChange={(e) => setLongMode(e.target.checked)}
+              className="accent-ink-900 dark:accent-white"
+            />
+            合并为一张长图下载
+          </label>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="btn-primary disabled:opacity-60"
+          >
+            {exporting ? "生成中…" : "导出分享图"}
+          </button>
+        </div>
       </div>
 
-      {pageAssignments.length > 1 && (
-        <div className="mb-12 rounded-card border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/40 p-5 text-sm">
-          <div className="flex items-baseline gap-3 mb-2 text-amber-900 dark:text-amber-100">
-            <span className="text-base">⚠️</span>
-            <span>
-              内容超出一页，已自动拆为 <b>{pageAssignments.length}</b> 张 PNG。
-              {overflowedSections.length > 0 && (
-                <>
-                  {" "}建议在编辑模式下精简：
-                  <b>
-                    {overflowedSections
-                      .map((id) => SECTION_LABEL[id])
-                      .join("、")}
-                  </b>
-                </>
-              )}
-            </span>
-          </div>
-          <div className="text-xs text-amber-700/80 dark:text-amber-300/80 ml-7">
-            点对应分组的「编辑」按钮删几条/精简文字 → 重新点「确认修改」 →
-            重新「导出分享图」即可压回一页。或者直接接受多页结果（p1
-            是核心摘要主图，多数学生只会看这张）。
-          </div>
+      {pageAssignments.length > 1 && !longMode && (
+        <div className="mb-12 rounded-card border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/40 px-5 py-4 text-sm text-amber-900 dark:text-amber-100">
+          内容较多，已拆为 <b>{pageAssignments.length}</b> 张图片。可点击编辑删减信息。
         </div>
       )}
 
@@ -873,6 +860,28 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
             totalPages={pageAssignments.length}
           />
         ))}
+      </div>
+
+      {/* Long-image card: a single tall 720-wide frame with hero + every
+          section + footer (no caption, no page indicator, no clipping).
+          Captured by html-to-image at 1.5× to produce a 1080×N PNG. */}
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          top: 0,
+          left: -10000,
+          pointerEvents: "none",
+          zIndex: -1,
+        }}
+      >
+        <ShareCard
+          ref={longCardRef}
+          offer={offer}
+          agencyName={agency.agencyName}
+          agencyLogo={agency.agencyLogo}
+          longMode
+        />
       </div>
 
       {toast && (

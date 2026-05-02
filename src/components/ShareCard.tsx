@@ -31,6 +31,11 @@ interface Props {
    * natural height to compute page assignments. Visually unused (host renders
    * it offscreen). */
   measureMode?: boolean;
+  /** Long-image mode: a single tall card with brand strip + hero at the top,
+   * every section in display order, footer at the very bottom (no caption,
+   * no page indicator, no auto-scale, no clipping). The exported PNG is
+   * 1080×N where N grows with content. */
+  longMode?: boolean;
 }
 
 const W = 720;
@@ -69,17 +74,23 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
     pageNum = 1,
     totalPages = 1,
     measureMode = false,
+    longMode = false,
   },
   ref,
 ) {
-  const visibleSections = measureMode ? ALL_SECTIONS : sections ?? ALL_SECTIONS;
-  const showHero = measureMode || isFirstPage;
-  const showCaption = measureMode || !isFirstPage;
+  // Long mode behaves like a single endless P1: hero + all sections + footer,
+  // no caption (no continuation page concept), no page indicator.
+  const visibleSections = measureMode || longMode
+    ? ALL_SECTIONS
+    : sections ?? ALL_SECTIONS;
+  const showHero = longMode || measureMode || isFirstPage;
+  const showCaption = !longMode && (measureMode || !isFirstPage);
   const showSpecs = visibleSections.includes("specs");
   const showFees = visibleSections.includes("fees");
   const showConditions = visibleSections.includes("conditions");
   const showTodos = visibleSections.includes("todos");
   const showNotes = visibleSections.includes("notes");
+  const isFreeFlow = measureMode || longMode;
   const today = new Date();
   const dateStamp = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(
     today.getDate(),
@@ -105,9 +116,8 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   const [scale, setScale] = useState(1);
 
   useLayoutEffect(() => {
-    // Measurement mode never auto-scales — we want the natural heights so
-    // OfferDetail can read each section accurately.
-    if (measureMode || !innerRef.current) return;
+    // Measure / long modes never auto-scale — content flows freely.
+    if (isFreeFlow || !innerRef.current) return;
     const naturalH = innerRef.current.scrollHeight;
     const next =
       naturalH <= H ? 1 : Math.max(MIN_SCALE, H / naturalH);
@@ -119,12 +129,11 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       ref={ref}
       style={{
         width: W,
-        // Measure mode lets the inner grow naturally so we can read each
-        // section's true height. Export mode hard-clips at H so html-to-image
-        // captures exactly the 1080×1920 frame.
-        height: measureMode ? "auto" : H,
+        // Measure / long mode let the inner grow naturally. Page mode
+        // hard-clips at H so html-to-image captures exactly 1080×1920.
+        height: isFreeFlow ? "auto" : H,
         backgroundColor: BG,
-        overflow: measureMode ? "visible" : "hidden",
+        overflow: isFreeFlow ? "visible" : "hidden",
         position: "relative",
       }}
     >
@@ -132,7 +141,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         ref={innerRef}
         style={{
           width: W,
-          minHeight: measureMode ? 0 : H,
+          minHeight: isFreeFlow ? 0 : H,
           color: INK,
           fontFamily: fontStack,
           padding: `${PAD_T}px ${PAD_X}px ${PAD_B}px`,
@@ -142,7 +151,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           display: "flex",
           flexDirection: "column",
           textAlign: "center",
-          transform: measureMode ? "none" : `scale(${scale})`,
+          transform: isFreeFlow ? "none" : `scale(${scale})`,
           transformOrigin: "50% 0",
         }}
       >
