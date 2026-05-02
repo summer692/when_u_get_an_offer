@@ -6,6 +6,23 @@ interface Props {
   offer: Offer;
   agencyName?: string;
   agencyLogo?: string;
+  /** 1 = hero/specs/fees, 2 = conditions+todos, 3 = notes. Defaults to 1.
+   * Only the pages that have content render; OfferDetail decides which. */
+  page?: 1 | 2 | 3;
+  /** Total pages being exported, for the "n / total" indicator. */
+  totalPages?: number;
+}
+
+/** Decide how many 1080×1920 pages this offer needs to fit without
+ * truncating any list. Page 1 is always present. */
+export function computeTotalPages(offer: Offer): number {
+  const conditionCount = offer.conditions?.length ?? 0;
+  const todoCount = offer.must_do?.length ?? 0;
+  const noteCount = offer.notes?.length ?? 0;
+  let pages = 1;
+  if (conditionCount > 0 || todoCount > 0) pages += 1;
+  if (noteCount > 0) pages += 1;
+  return pages;
 }
 
 const W = 720;
@@ -35,9 +52,12 @@ const HAIRLINE_STRONG = "#0A0A0A";
 const DATE_RED = "#D70015";
 
 export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
-  { offer, agencyName, agencyLogo },
+  { offer, agencyName, agencyLogo, page = 1, totalPages = 1 },
   ref,
 ) {
+  const showHero = page === 1;
+  const showLists = page === 2;
+  const showNotes = page === 3;
   const today = new Date();
   const dateStamp = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(
     today.getDate(),
@@ -150,6 +170,25 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       </div>
       <div style={{ height: 1, background: HAIRLINE_STRONG }} />
 
+      {/* Pages 2-3 caption: school + program in one line so a continuation
+          page is still self-contained when shared standalone. */}
+      {!showHero && (
+        <div
+          style={{
+            marginTop: 18,
+            fontSize: 14,
+            color: SUB,
+            letterSpacing: "0.02em",
+            lineHeight: 1.5,
+            textAlign: "center",
+          }}
+        >
+          <span style={{ color: INK, fontWeight: 600 }}>{schoolZh}</span>
+          {programZh ? ` · ${programZh}` : offer.program ? ` · ${offer.program}` : ""}
+        </div>
+      )}
+
+      {showHero && <>
       {/* Greeting */}
       <div style={{ marginTop: 36, marginBottom: 22 }}>
         <div
@@ -257,8 +296,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         <Fee label="留位费" money={offer.fees?.deposit} />
         <Fee label="奖学金" money={offer.fees?.scholarship} />
       </div>
+      </>}
 
-      {offer.conditions && offer.conditions.length > 0 && (
+      {showLists && offer.conditions && offer.conditions.length > 0 && (
         <Section title="录取条件">
           <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
             {offer.conditions.map((c, i) => (
@@ -275,7 +315,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         </Section>
       )}
 
-      {todos.length > 0 && (
+      {showLists && todos.length > 0 && (
         <Section title="接下来你要做的">
           <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
             {todos.map((m, i) => (
@@ -293,7 +333,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         </Section>
       )}
 
-      {offer.notes && offer.notes.length > 0 && (
+      {showNotes && offer.notes && offer.notes.length > 0 && (
         <Section title="重要备注">
           <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
             {offer.notes.map((n, i) => (
@@ -346,7 +386,14 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         <span>
           {agencyName ? `Curated by ${agencyName}` : "Curated by OfferLens"}
         </span>
-        <span style={{ fontVariantNumeric: "tabular-nums" }}>{dateStamp}</span>
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>
+          {dateStamp}
+          {totalPages > 1 && (
+            <span style={{ marginLeft: 14, color: MUTE, fontWeight: 500 }}>
+              {page} / {totalPages}
+            </span>
+          )}
+        </span>
       </div>
       </div>
     </div>

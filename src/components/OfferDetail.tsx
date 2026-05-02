@@ -4,7 +4,7 @@ import { daysUntil, formatDaysLeft } from "../lib/countdown";
 import { formatDate, formatMoney } from "../lib/format";
 import { getSettings } from "../lib/db";
 import { exportNodeToImage, safeFilename } from "../lib/exportImage";
-import { ShareCard } from "./ShareCard";
+import { ShareCard, computeTotalPages } from "./ShareCard";
 import { MoneyEditor } from "./MoneyEditor";
 import { applyResearch, pruneInfoGaps, researchOffer } from "../lib/llm";
 
@@ -25,8 +25,12 @@ interface Props {
 }
 
 export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
-  const cardRef = useRef<HTMLDivElement>(null);
+  // One ref per export page — each ShareCard renders a fixed 720×1280 frame
+  // (which html-to-image scales 1.5× to a 1080×1920 PNG). Multi-page mode
+  // produces independent PNGs, not one tall image.
+  const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const feesRef = useRef<HTMLDivElement>(null);
+  const totalPages = computeTotalPages(offer);
 
   function scrollToFees() {
     feesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -72,25 +76,42 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   }, [offer.duration]);
 
   async function handleExport() {
-    if (!cardRef.current || exporting) return;
+    if (exporting) return;
     if (isDirty) {
       flashToast("有未保存的修改，请先点「确认修改」再导出图片", 3500);
       return;
     }
+    const pages = cardRefs.current.slice(0, totalPages).filter(Boolean) as HTMLDivElement[];
+    if (pages.length === 0) return;
     setExporting(true);
     try {
       const fresh = await getSettings();
       setAgency({ agencyName: fresh.agencyName, agencyLogo: fresh.agencyLogo });
       await new Promise((r) => requestAnimationFrame(() => r(null)));
-      const filename = `${safeFilename(schoolZh)}-offer.png`;
-      const result = await exportNodeToImage(cardRef.current, filename);
-      setToast(result.mode === "shared" ? "已分享" : "已保存图片");
+      const stamp = timestampStamp();
+      const base = `offer_${safeFilename(schoolZh)}_${stamp}`;
+      let lastResultMode: "shared" | "downloaded" | null = null;
+      for (let i = 0; i < pages.length; i++) {
+        const filename =
+          pages.length === 1 ? `${base}.png` : `${base}_p${i + 1}.png`;
+        // Sequential — most browsers throttle multi-file shares / downloads
+        // when fired in parallel, and the user-visible result is identical.
+        const result = await exportNodeToImage(pages[i], filename);
+        lastResultMode = result.mode;
+      }
+      setToast(
+        pages.length === 1
+          ? lastResultMode === "shared"
+            ? "已分享"
+            : "已保存图片"
+          : `已保存 ${pages.length} 张图片（p1 是核心摘要主图）`,
+      );
     } catch (err) {
       console.error(err);
       setToast("导出失败，请重试");
     } finally {
       setExporting(false);
-      setTimeout(() => setToast(null), 2400);
+      setTimeout(() => setToast(null), 3200);
     }
   }
 
@@ -632,12 +653,19 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
           zIndex: -1,
         }}
       >
-        <ShareCard
-          ref={cardRef}
-          offer={offer}
-          agencyName={agency.agencyName}
-          agencyLogo={agency.agencyLogo}
-        />
+        {Array.from({ length: totalPages }).map((_, i) => (
+          <ShareCard
+            key={i}
+            ref={(el) => {
+              cardRefs.current[i] = el;
+            }}
+            offer={offer}
+            agencyName={agency.agencyName}
+            agencyLogo={agency.agencyLogo}
+            page={(i + 1) as 1 | 2 | 3}
+            totalPages={totalPages}
+          />
+        ))}
       </div>
 
       {toast && (
@@ -818,6 +846,15 @@ function hostOf(url: string): string {
 function buildVerifyUrl(school: string, program: string, title: string): string {
   const q = `${school} ${program} ${title === "学费" ? "tuition fee" : title} site:edu OR site:edu.hk OR site:ac.uk`;
   return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+}
+
+function timestampStamp(): string {
+  const d = new Date();
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return (
+    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
+    `_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
+  );
 }
 
 function sortedTodos(todos: MustDo[]): MustDo[] {
