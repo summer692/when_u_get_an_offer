@@ -126,6 +126,12 @@ export interface Offer extends ExtractedOffer {
   updated_at: number;
   source_kind: "pdf" | "image" | "text" | "docx";
   source_name?: string;
+  /** Per-field overrides for whether a field should appear in the exported
+   * share card. Keyed by stable field path, e.g. "fees.tuition", "duration",
+   * "conditions.0", "must_do.2", "notes.1". Absent key = use the default
+   * (data-bearing fields visible, empty fields hidden). Stored as overrides
+   * only so the share card stays sensible if the underlying data changes. */
+  share_visibility?: Record<string, boolean>;
 }
 
 export type Provider = "google" | "openrouter";

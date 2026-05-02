@@ -9,6 +9,12 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { MoneyEditor } from "./MoneyEditor";
 import { ExportPreview, type PreviewItem } from "./ExportPreview";
 import { applyResearch, pruneInfoGaps, researchOffer } from "../lib/llm";
+import {
+  defaultShareVisible,
+  hideAllEmptyFields,
+  isVisibleInShare,
+  setShareVisibility,
+} from "../lib/shareVisibility";
 
 type FeeKey = "tuition" | "deposit" | "scholarship";
 type EditKey = "conditions" | "must_do" | "notes";
@@ -379,6 +385,35 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     setTimeout(() => setToast(null), ms);
   }
 
+  /** Flip a single field's "show in share image" override and persist
+   * immediately. No confirm dialog — visibility is reversible and low-stakes. */
+  async function toggleShare(key: string) {
+    const next = setShareVisibility(offer, key, !isVisibleInShare(offer, key));
+    await onUpdate(next);
+  }
+
+  /** "一键隐藏所有空字段": records explicit false overrides for every fee /
+   * spec field whose default visibility is false (no data). Idempotent. */
+  async function bulkHideEmpty() {
+    const next = hideAllEmptyFields(offer);
+    await onUpdate(next);
+    flashToast("已隐藏所有空字段");
+  }
+
+  /** Count of fields whose default visibility is false (i.e. empty). Used
+   * to gate the bulk-hide button — we don't show it when there's nothing to
+   * hide. */
+  const emptyFieldCount = (
+    [
+      "fees.tuition",
+      "fees.deposit",
+      "fees.scholarship",
+      "duration",
+      "faculty",
+      "term_start",
+    ] as const
+  ).filter((k) => !defaultShareVisible(offer, k)).length;
+
   function startEdit(key: EditKey) {
     if (editing && editing !== key) {
       flashToast("请先保存或取消上一处修改", 2400);
@@ -426,6 +461,15 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     if (key === "conditions" || key === "must_do") {
       updated.info_gaps = pruneInfoGaps(updated);
     }
+    // Edits may insert / delete / reorder items, which would leave the
+    // old visibility map mis-aligned. Drop overrides for this section so
+    // the resulting share card defaults to visible — user can re-hide.
+    if (updated.share_visibility) {
+      const sv = { ...updated.share_visibility };
+      const prefix = `${key}.`;
+      for (const k of Object.keys(sv)) if (k.startsWith(prefix)) delete sv[k];
+      updated.share_visibility = sv;
+    }
     await onUpdate(updated);
     setDraft((prev) => {
       const next = { ...prev };
@@ -439,11 +483,20 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
 
   return (
     <div className="fade-up max-w-4xl mx-auto px-6 py-10">
-      <div className="flex items-center justify-between mb-16 gap-4">
+      <div className="flex items-center justify-between mb-16 gap-4 flex-wrap">
         <button onClick={onBack} className="btn-ghost -ml-3">
           ← 返回
         </button>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          {emptyFieldCount > 0 && (
+            <button
+              onClick={bulkHideEmpty}
+              className="text-xs px-3 py-1.5 rounded-full border border-ink-200 dark:border-ink-700 text-ink-700 dark:text-ink-300 hover:border-ink-900 hover:text-ink-900 dark:hover:border-white dark:hover:text-white transition-colors"
+              title="把所有'—'空字段从分享图里隐藏"
+            >
+              一键隐藏所有空字段
+            </button>
+          )}
           <label className="flex items-center gap-2 text-sm text-ink-500 hover:text-ink-900 dark:hover:text-white cursor-pointer select-none">
             <input
               type="checkbox"
@@ -532,6 +585,12 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               secondary={
                 facultyZh !== offer.faculty ? offer.faculty : undefined
               }
+              trailing={
+                <ShareToggle
+                  visible={isVisibleInShare(offer, "faculty")}
+                  onToggle={() => toggleShare("faculty")}
+                />
+              }
             />
           )}
           {offer.student_category && (
@@ -553,6 +612,12 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                     {termStartDisplay}
                   </span>
                 )
+              }
+              trailing={
+                <ShareToggle
+                  visible={isVisibleInShare(offer, "term_start")}
+                  onToggle={() => toggleShare("term_start")}
+                />
               }
             />
           )}
@@ -621,6 +686,14 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                 </button>
               )
             }
+            trailing={
+              offer.duration ? (
+                <ShareToggle
+                  visible={isVisibleInShare(offer, "duration")}
+                  onToggle={() => toggleShare("duration")}
+                />
+              ) : undefined
+            }
           />
         </div>
       </Section>
@@ -635,6 +708,8 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               program={offer.program}
               onEdit={() => setEditingFee("tuition")}
               researched={offer.researched_fields?.includes("tuition")}
+              shareVisible={isVisibleInShare(offer, "fees.tuition")}
+              onToggleShare={() => toggleShare("fees.tuition")}
             />
             <FeeBlock
               title="留位费"
@@ -643,6 +718,8 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               program={offer.program}
               onEdit={() => setEditingFee("deposit")}
               researched={offer.researched_fields?.includes("deposit")}
+              shareVisible={isVisibleInShare(offer, "fees.deposit")}
+              onToggleShare={() => toggleShare("fees.deposit")}
             />
             <FeeBlock
               title="奖学金"
@@ -651,6 +728,8 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               program={offer.program}
               onEdit={() => setEditingFee("scholarship")}
               researched={offer.researched_fields?.includes("scholarship")}
+              shareVisible={isVisibleInShare(offer, "fees.scholarship")}
+              onToggleShare={() => toggleShare("fees.scholarship")}
             />
           </div>
         </Section>
@@ -746,6 +825,12 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                       </div>
                     )}
                   </div>
+                  <div className="shrink-0">
+                    <ShareToggle
+                      visible={isVisibleInShare(offer, `conditions.${i}`)}
+                      onToggle={() => toggleShare(`conditions.${i}`)}
+                    />
+                  </div>
                 </li>
               ))}
             </ol>
@@ -768,42 +853,57 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
             />
           ) : (
             <ol className="space-y-4">
-              {todos.map((m, i) => (
-                <li key={i} className="card p-5 flex items-start gap-4">
-                  <span className="text-ink-500 font-medium tabular shrink-0 w-6">
-                    {i + 1}.
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span
-                        className={`font-semibold ${
-                          m.priority === "high" ? "text-red-600 dark:text-red-400" : ""
-                        }`}
-                      >
-                        {m.action}
-                      </span>
-                      {m.priority === "high" && (
-                        <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
-                          紧急
+              {todos.map((m, i) => {
+                // The share-visibility map is keyed by the ORIGINAL position
+                // in offer.must_do (sortedTodos may reshuffle for display).
+                const origIdx = (offer.must_do ?? []).indexOf(m);
+                return (
+                  <li key={i} className="card p-5 flex items-start gap-4">
+                    <span className="text-ink-500 font-medium tabular shrink-0 w-6">
+                      {i + 1}.
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span
+                          className={`font-semibold ${
+                            m.priority === "high"
+                              ? "text-red-600 dark:text-red-400"
+                              : ""
+                          }`}
+                        >
+                          {m.action}
                         </span>
+                        {m.priority === "high" && (
+                          <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                            紧急
+                          </span>
+                        )}
+                      </div>
+                      {m.details && (
+                        <div className="text-sm text-ink-500 mt-1.5 leading-relaxed whitespace-pre-line">
+                          {m.details}
+                        </div>
+                      )}
+                      {m.deadline && (
+                        <div className="text-sm mt-1.5 flex items-baseline gap-2">
+                          <span className="text-red-600 dark:text-red-400 font-medium">
+                            截止 {formatDate(m.deadline)}
+                          </span>
+                          <CountdownPill date={m.deadline} />
+                        </div>
                       )}
                     </div>
-                    {m.details && (
-                      <div className="text-sm text-ink-500 mt-1.5 leading-relaxed whitespace-pre-line">
-                        {m.details}
+                    {origIdx >= 0 && (
+                      <div className="shrink-0">
+                        <ShareToggle
+                          visible={isVisibleInShare(offer, `must_do.${origIdx}`)}
+                          onToggle={() => toggleShare(`must_do.${origIdx}`)}
+                        />
                       </div>
                     )}
-                    {m.deadline && (
-                      <div className="text-sm mt-1.5 flex items-baseline gap-2">
-                        <span className="text-red-600 dark:text-red-400 font-medium">
-                          截止 {formatDate(m.deadline)}
-                        </span>
-                        <CountdownPill date={m.deadline} />
-                      </div>
-                    )}
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ol>
           )}
         </EditableSection>
@@ -831,6 +931,12 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                 >
                   <span className="mt-2 w-1.5 h-1.5 rounded-full bg-ink-500 shrink-0" />
                   <span className="flex-1 font-semibold">{n}</span>
+                  <div className="shrink-0">
+                    <ShareToggle
+                      visible={isVisibleInShare(offer, `notes.${i}`)}
+                      onToggle={() => toggleShare(`notes.${i}`)}
+                    />
+                  </div>
                 </li>
               ))}
             </ul>
@@ -996,10 +1102,14 @@ function Fact({
   label,
   value,
   secondary,
+  trailing,
 }: {
   label: string;
   value: React.ReactNode;
   secondary?: string;
+  /** Optional element rendered at the right edge — used to attach a
+   * ShareToggle without breaking the value's baseline alignment. */
+  trailing?: React.ReactNode;
 }) {
   return (
     <div className="py-5 flex items-baseline gap-8">
@@ -1014,6 +1124,7 @@ function Fact({
           </div>
         )}
       </div>
+      {trailing && <div className="shrink-0">{trailing}</div>}
     </div>
   );
 }
@@ -1047,6 +1158,8 @@ function FeeBlock({
   program,
   onEdit,
   researched,
+  shareVisible,
+  onToggleShare,
 }: {
   title: string;
   money?: Money | null;
@@ -1056,6 +1169,9 @@ function FeeBlock({
   /** True when this field's value was filled in by researchOffer (Gemini
    * + grounded web search) rather than read directly off the offer. */
   researched?: boolean;
+  /** Whether this field will appear in the exported share image. */
+  shareVisible: boolean;
+  onToggleShare: () => void;
 }) {
   const value = formatMoney(money);
   const verified = money?.manually_edited;
@@ -1107,6 +1223,7 @@ function FeeBlock({
                 : "参考值 · 系统估算"}
             </Badge>
           )}
+          <ShareToggle visible={shareVisible} onToggle={onToggleShare} />
           <span className="text-ink-300 dark:text-ink-700 text-[10px] uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
             编辑
           </span>
@@ -1166,6 +1283,39 @@ function FeeBlock({
         )
       )}
     </div>
+  );
+}
+
+function ShareToggle({
+  visible,
+  onToggle,
+}: {
+  visible: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={visible}
+      onClick={(e) => {
+        // Don't bubble into the parent card's onClick (which opens edit).
+        e.stopPropagation();
+        onToggle();
+      }}
+      title={
+        visible
+          ? "在分享图中显示（点击隐藏）"
+          : "分享图中已隐藏（点击显示）"
+      }
+      className={`text-[10px] tracking-wider px-2 py-0.5 rounded-full border transition-colors ${
+        visible
+          ? "border-emerald-300 text-emerald-700 dark:border-emerald-700/60 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20"
+          : "border-ink-200 dark:border-ink-700 text-ink-400"
+      }`}
+    >
+      {visible ? "✓ 分享图" : "○ 已隐藏"}
+    </button>
   );
 }
 

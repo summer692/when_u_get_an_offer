@@ -1,6 +1,7 @@
 import { forwardRef, useLayoutEffect, useRef, useState } from "react";
 import type { Money, MustDo, Offer } from "../lib/schema";
 import { formatDate, formatMoney } from "../lib/format";
+import { isVisibleInShare } from "../lib/shareVisibility";
 
 export type SectionId = "specs" | "fees" | "conditions" | "todos" | "notes";
 export const ALL_SECTIONS: readonly SectionId[] = [
@@ -107,6 +108,39 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   const termStartDisplay =
     termStartDate ? formatDate(termStartDate) : offer.term_start_text || null;
   const todos = sortedTodos(offer.must_do ?? []);
+
+  // Per-field visibility for the share export. Empty fields default to
+  // hidden so newcomers get a clean poster; explicit overrides win.
+  const showFee = {
+    tuition: isVisibleInShare(offer, "fees.tuition"),
+    deposit: isVisibleInShare(offer, "fees.deposit"),
+    scholarship: isVisibleInShare(offer, "fees.scholarship"),
+  };
+  const visibleFeeCount =
+    Number(showFee.tuition) +
+    Number(showFee.deposit) +
+    Number(showFee.scholarship);
+  const showSpec = {
+    duration: isVisibleInShare(offer, "duration"),
+    term_start: isVisibleInShare(offer, "term_start"),
+    faculty: isVisibleInShare(offer, "faculty"),
+  };
+  const visibleSpecCount =
+    Number(showSpec.duration) +
+    Number(showSpec.term_start) +
+    Number(showSpec.faculty);
+  // List items that survived the per-item visibility filter. Index keys
+  // refer back to the ORIGINAL position so toggling stays stable across
+  // re-renders.
+  const visibleConditions = (offer.conditions ?? [])
+    .map((c, i) => ({ c, i }))
+    .filter(({ i }) => isVisibleInShare(offer, `conditions.${i}`));
+  const visibleTodos = todos
+    .map((m) => ({ m, i: (offer.must_do ?? []).indexOf(m) }))
+    .filter(({ i }) => i < 0 || isVisibleInShare(offer, `must_do.${i}`));
+  const visibleNotes = (offer.notes ?? [])
+    .map((n, i) => ({ n, i }))
+    .filter(({ i }) => isVisibleInShare(offer, `notes.${i}`));
 
   // Auto-fit: render inner at natural size, measure scrollHeight, scale the
   // whole inner uniformly when it overflows the 1280 frame. Layout box is
@@ -292,8 +326,10 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       </div>
       </div>}
 
-      {/* Specs row — keynote spec sheet */}
-      {showSpecs && <div
+      {/* Specs row — keynote spec sheet. Auto-adapts when some specs are
+          hidden: 3-col → 2-col → 1-col centered. Whole row vanishes when
+          all three are hidden. */}
+      {showSpecs && visibleSpecCount > 0 && <div
         data-section="specs"
         style={{
           marginTop: 22,
@@ -302,59 +338,75 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           borderTop: `1px solid ${HAIRLINE}`,
           borderBottom: `1px solid ${HAIRLINE}`,
           display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
+          gridTemplateColumns: `repeat(${visibleSpecCount}, minmax(0, 1fr))`,
           gap: 24,
+          justifyItems: visibleSpecCount === 1 ? "center" : "stretch",
         }}
       >
-        <Spec
-          label="学制"
-          value={offer.duration ?? "—"}
-          researched={offer.researched_fields?.includes("duration") ?? false}
-        />
-        <Spec label="入学" value={termStartDisplay ?? "—"} tone="date" />
-        <Spec
-          label="学院"
-          value={facultyZh ?? offer.student_category ?? "—"}
-        />
+        {showSpec.duration && (
+          <Spec
+            label="学制"
+            value={offer.duration ?? "—"}
+            researched={offer.researched_fields?.includes("duration") ?? false}
+          />
+        )}
+        {showSpec.term_start && (
+          <Spec label="入学" value={termStartDisplay ?? "—"} tone="date" />
+        )}
+        {showSpec.faculty && (
+          <Spec
+            label="学院"
+            value={facultyZh ?? offer.student_category ?? "—"}
+          />
+        )}
       </div>}
 
-      {/* Fees — big numbers */}
-      {showFees && <div
+      {/* Fees — big numbers. Same auto-adapt as the spec row: grid columns
+          collapse to the visible count, single fee centers itself, all-three-
+          hidden vanishes the whole block. */}
+      {showFees && visibleFeeCount > 0 && <div
         data-section="fees"
         style={{
           marginTop: 12,
           paddingBottom: 16,
           borderBottom: `1px solid ${HAIRLINE}`,
           display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
+          gridTemplateColumns: `repeat(${visibleFeeCount}, minmax(0, 1fr))`,
           gap: 24,
+          justifyItems: visibleFeeCount === 1 ? "center" : "stretch",
         }}
       >
-        <Fee
-          label="学费"
-          money={offer.fees?.tuition}
-          researched={offer.researched_fields?.includes("tuition") ?? false}
-        />
-        <Fee
-          label="留位费"
-          money={offer.fees?.deposit}
-          researched={offer.researched_fields?.includes("deposit") ?? false}
-        />
-        <Fee
-          label="奖学金"
-          money={offer.fees?.scholarship}
-          researched={offer.researched_fields?.includes("scholarship") ?? false}
-        />
+        {showFee.tuition && (
+          <Fee
+            label="学费"
+            money={offer.fees?.tuition}
+            researched={offer.researched_fields?.includes("tuition") ?? false}
+          />
+        )}
+        {showFee.deposit && (
+          <Fee
+            label="留位费"
+            money={offer.fees?.deposit}
+            researched={offer.researched_fields?.includes("deposit") ?? false}
+          />
+        )}
+        {showFee.scholarship && (
+          <Fee
+            label="奖学金"
+            money={offer.fees?.scholarship}
+            researched={offer.researched_fields?.includes("scholarship") ?? false}
+          />
+        )}
       </div>}
 
-      {showConditions && offer.conditions && offer.conditions.length > 0 && (
+      {showConditions && visibleConditions.length > 0 && (
         <Section title="录取条件" dataId="conditions">
           <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-            {offer.conditions.map((c, i) => (
+            {visibleConditions.map(({ c, i }, displayIdx) => (
               <ListItem
                 key={i}
-                index={i + 1}
-                isLast={i === offer.conditions!.length - 1}
+                index={displayIdx + 1}
+                isLast={displayIdx === visibleConditions.length - 1}
                 main={c.item}
                 details={c.details ?? undefined}
                 deadline={c.deadline ?? undefined}
@@ -364,14 +416,14 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         </Section>
       )}
 
-      {showTodos && todos.length > 0 && (
+      {showTodos && visibleTodos.length > 0 && (
         <Section title="接下来你要做的" dataId="todos">
           <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-            {todos.map((m, i) => (
+            {visibleTodos.map(({ m }, displayIdx) => (
               <ListItem
-                key={i}
-                index={i + 1}
-                isLast={i === todos.length - 1}
+                key={displayIdx}
+                index={displayIdx + 1}
+                isLast={displayIdx === visibleTodos.length - 1}
                 main={m.action}
                 details={m.details ?? undefined}
                 deadline={m.deadline ?? undefined}
@@ -381,10 +433,10 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         </Section>
       )}
 
-      {showNotes && offer.notes && offer.notes.length > 0 && (
+      {showNotes && visibleNotes.length > 0 && (
         <Section title="重要备注" dataId="notes">
           <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-            {offer.notes.map((n, i) => (
+            {visibleNotes.map(({ n }, i) => (
               <li
                 key={i}
                 style={{
