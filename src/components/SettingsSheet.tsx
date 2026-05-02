@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getSettings, setSetting } from "../lib/db";
 import { DEFAULT_PROVIDER, PROVIDERS } from "../lib/llm";
 import type { Provider } from "../lib/schema";
+import { Modal } from "./Modal";
 
 interface Props {
   open: boolean;
@@ -55,20 +56,12 @@ export function SettingsSheet({ open, onClose }: Props) {
     onClose();
   }
 
-  if (!open) return null;
-
   const meta = PROVIDER_META[provider];
   const config = PROVIDERS[provider];
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-6"
-      onClick={onClose}
-    >
-      <div
-        className="w-full md:max-w-lg bg-white dark:bg-black rounded-t-2xl md:rounded-card border border-ink-100 dark:border-ink-700 p-8 md:p-10 fade-up max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal open={open} onClose={onClose} variant="sheet">
+      <div className="p-8 md:p-10">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-xl font-display font-medium tracking-tight">
             设置
@@ -134,7 +127,7 @@ export function SettingsSheet({ open, onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -1,6 +1,8 @@
+import { useState } from "react";
 import type { Offer } from "../lib/schema";
 import { daysUntil, formatDaysLeft } from "../lib/countdown";
 import { formatMoney } from "../lib/format";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 interface Props {
   offer: Offer;
@@ -14,13 +16,12 @@ export function OfferCard({ offer, onClick, onDelete }: Props) {
   const schoolZh = offer.school_zh || offer.school;
   const programZh = offer.program_zh || offer.program;
   const countryZh = offer.country_zh || offer.country;
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   function handleDelete(e: React.MouseEvent) {
     e.stopPropagation();
     if (!onDelete) return;
-    if (window.confirm(`确认删除「${schoolZh}」这份 offer？`)) {
-      onDelete();
-    }
+    setConfirmingDelete(true);
   }
 
   return (
@@ -87,6 +88,18 @@ export function OfferCard({ offer, onClick, onDelete }: Props) {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        tone="danger"
+        confirmLabel="确认删除"
+        message={`确认删除「${schoolZh}」这份 offer？\n删除后无法恢复。`}
+        onConfirm={() => {
+          setConfirmingDelete(false);
+          onDelete?.();
+        }}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </div>
   );
 }

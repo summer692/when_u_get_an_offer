@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Settings } from "../lib/schema";
 import { getSettings, setSetting } from "../lib/db";
+import { Modal } from "./Modal";
 
 interface Props {
   open: boolean;
@@ -46,17 +47,9 @@ export function AgencyEditor({ open, onClose, onSaved }: Props) {
     onClose();
   }
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-6"
-      onClick={onClose}
-    >
-      <div
-        className="w-full md:max-w-md bg-white dark:bg-black rounded-t-2xl md:rounded-card border border-ink-100 dark:border-ink-700 p-8 fade-up max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal open={open} onClose={onClose} variant="sheet" widthClass="w-full md:max-w-md">
+      <div className="p-8">
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-xl font-display font-medium tracking-tight">
             分享图品牌
@@ -137,6 +130,6 @@ export function AgencyEditor({ open, onClose, onSaved }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

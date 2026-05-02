@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Money } from "../lib/schema";
+import { Modal } from "./Modal";
 
 const CURRENCIES = ["HKD", "USD", "GBP", "EUR", "CNY", "SGD", "AUD", "CAD", "JPY", "KRW"];
 
@@ -29,8 +30,6 @@ export function MoneyEditor({ open, title, initial, onClose, onSave }: Props) {
     setTimeout(() => firstFieldRef.current?.focus(), 50);
   }, [open, initial]);
 
-  if (!open) return null;
-
   function handleSave() {
     const trimmed = amount.trim();
     if (!trimmed) {
@@ -53,14 +52,8 @@ export function MoneyEditor({ open, title, initial, onClose, onSave }: Props) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-6"
-      onClick={onClose}
-    >
-      <div
-        className="w-full md:max-w-md bg-white dark:bg-ink-900 rounded-t-3xl md:rounded-card p-8 md:p-10 fade-up max-h-[90vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Modal open={open} onClose={onClose} variant="sheet" widthClass="w-full md:max-w-md">
+      <div className="p-8 md:p-10">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-display font-semibold">编辑{title}</h2>
           <button
@@ -164,6 +157,6 @@ export function MoneyEditor({ open, title, initial, onClose, onSave }: Props) {
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

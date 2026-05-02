@@ -5,6 +5,7 @@ import { formatDate, formatMoney } from "../lib/format";
 import { getSettings } from "../lib/db";
 import { exportNodeToImage, safeFilename } from "../lib/exportImage";
 import { ALL_SECTIONS, ShareCard, type SectionId } from "./ShareCard";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { MoneyEditor } from "./MoneyEditor";
 import { applyResearch, pruneInfoGaps, researchOffer } from "../lib/llm";
 
@@ -40,6 +41,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   ]);
   const [longMode, setLongMode] = useState(false);
   const longCardRef = useRef<HTMLDivElement | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   function scrollToFees() {
     feesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -777,10 +779,11 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
 
       <div className="mt-24 pt-8 border-t border-ink-100 dark:border-ink-700">
         <button
-          onClick={onDelete}
-          className="text-sm text-red-500 hover:text-red-600 transition-colors"
+          onClick={() => setConfirmingDelete(true)}
+          className="inline-flex items-center gap-2 text-sm text-red-500 hover:text-red-600 transition-colors"
         >
-          删除这个 offer
+          <span aria-hidden>🗑️</span>
+          <span>删除这个 offer</span>
         </button>
       </div>
 
@@ -809,6 +812,18 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         }
         onConfirm={commitSave}
         onCancel={() => setConfirming(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        tone="danger"
+        confirmLabel="确认删除"
+        message={"确认删除这份 offer？\n删除后无法恢复。"}
+        onConfirm={() => {
+          setConfirmingDelete(false);
+          onDelete();
+        }}
+        onCancel={() => setConfirmingDelete(false)}
       />
 
       {/* Measurement card: every section rendered in one tall column at
@@ -1348,37 +1363,3 @@ function EditableNoteList({
   );
 }
 
-function ConfirmDialog({
-  open,
-  message,
-  onConfirm,
-  onCancel,
-}: {
-  open: boolean;
-  message: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  if (!open) return null;
-  return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6"
-      onClick={onCancel}
-    >
-      <div
-        className="bg-white dark:bg-black rounded-card border border-ink-100 dark:border-ink-700 p-7 md:p-8 max-w-md w-full fade-up"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="text-base leading-relaxed mb-7">{message}</p>
-        <div className="flex justify-end gap-3">
-          <button onClick={onCancel} className="btn-ghost">
-            取消
-          </button>
-          <button onClick={onConfirm} className="btn-primary">
-            确认
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
