@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   open: boolean;
@@ -16,20 +17,18 @@ interface Props {
 }
 
 /**
- * Viewport-anchored modal primitive that fixes the three usability bugs
- * the bespoke modals had:
+ * Viewport-anchored modal primitive.
  *
- *   1. Always centers in the *viewport*, not the document — the content
- *      grid uses min-h-full + flex-center so a deep-scrolled page still
- *      shows the dialog right under the user's eyes. Tall dialogs can
- *      scroll within the overlay instead of overflowing off-screen.
- *
- *   2. Locks <body> scroll while open and restores the previous overflow
- *      value on close. The viewport position is preserved automatically
- *      (no jump back to top).
- *
- *   3. Backdrop click and ESC both fire onClose, so users can dismiss
- *      from anywhere without hunting for the × icon.
+ * Rendered through a React Portal into <body> on purpose: OfferDetail's
+ * `.fade-up` wrapper has `transform: translate3d(0,0,0)` after its mount
+ * animation, and per CSS spec any non-none transform turns the element
+ * into the *containing block* for any `position: fixed` descendants. If
+ * the modal lived inline, `fixed inset-0` would clip to the wrapper, not
+ * the viewport — exactly the "dialog appears at the top of the page"
+ * (and worse, "dialog is invisible because we scroll-locked the body
+ * before centering inside an offscreen ancestor") bug we hit. Portal
+ * escapes the transformed subtree and pins the overlay to the actual
+ * viewport.
  */
 export function Modal({
   open,
@@ -73,7 +72,7 @@ export function Modal({
       ? "rounded-t-3xl md:rounded-card"
       : "rounded-card";
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm overflow-y-auto"
       onClick={dismissable ? onClose : undefined}
@@ -86,6 +85,7 @@ export function Modal({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
