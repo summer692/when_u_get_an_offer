@@ -3,10 +3,11 @@ import type { Condition, Money, MustDo, Offer, Settings } from "../lib/schema";
 import { daysUntil, formatDaysLeft } from "../lib/countdown";
 import { formatDate, formatMoney } from "../lib/format";
 import { getSettings } from "../lib/db";
-import { exportNodeToImage, safeFilename } from "../lib/exportImage";
+import { captureNodeAsDataUrl, downloadDataUrl, safeFilename } from "../lib/exportImage";
 import { ALL_SECTIONS, ShareCard, type SectionId } from "./ShareCard";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MoneyEditor } from "./MoneyEditor";
+import { ExportPreview, type PreviewItem } from "./ExportPreview";
 import { applyResearch, pruneInfoGaps, researchOffer } from "../lib/llm";
 
 type FeeKey = "tuition" | "deposit" | "scholarship";
@@ -42,6 +43,13 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   const [longMode, setLongMode] = useState(false);
   const longCardRef = useRef<HTMLDivElement | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Export preview flow: 点"生成图片" → 抓 PNG → 弹预览 → 用户确认 → 下载。
+  // previewItems undefined = preview modal in 生成中 loading state.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewItems, setPreviewItems] = useState<PreviewItem[] | undefined>(
+    undefined,
+  );
+  const [downloadingPreview, setDownloadingPreview] = useState(false);
 
   function scrollToFees() {
     feesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -218,54 +226,91 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     });
   }, [offer]);
 
+  /** Step 1: 用户点"生成图片" → 抓所有页的 PNG dataURL，弹预览模态框。 */
   async function handleExport() {
     if (exporting) return;
     if (isDirty) {
       flashToast("有未保存的修改，请先点「确认修改」再导出图片", 3500);
       return;
     }
+    // Open the preview modal in loading state immediately so the user gets
+    // visual feedback while we capture.
+    setPreviewItems(undefined);
+    setPreviewOpen(true);
     setExporting(true);
     try {
       const fresh = await getSettings();
       setAgency({ agencyName: fresh.agencyName, agencyLogo: fresh.agencyLogo });
+      // Wait one frame so the agency-logo prop change actually paints into
+      // the offscreen ShareCards before we capture them.
       await new Promise((r) => requestAnimationFrame(() => r(null)));
       const stamp = timestampStamp();
       const base = `offer_${safeFilename(schoolZh)}_${stamp}`;
 
+      const items: PreviewItem[] = [];
       if (longMode) {
         if (!longCardRef.current) return;
-        const filename = `${base}_long.png`;
-        const result = await exportNodeToImage(longCardRef.current, filename);
-        setToast(result.mode === "shared" ? "已分享长图" : "已保存长图");
+        const dataUrl = await captureNodeAsDataUrl(longCardRef.current);
+        items.push({ dataUrl, filename: `${base}_long.png` });
       } else {
         const pages = cardRefs.current
           .slice(0, pageAssignments.length)
           .filter(Boolean) as HTMLDivElement[];
-        if (pages.length === 0) return;
-        let lastResultMode: "shared" | "downloaded" | null = null;
+        if (pages.length === 0) {
+          setPreviewOpen(false);
+          return;
+        }
         for (let i = 0; i < pages.length; i++) {
           const filename =
             pages.length === 1 ? `${base}.png` : `${base}_p${i + 1}.png`;
-          // Sequential — most browsers throttle multi-file shares / downloads
-          // when fired in parallel, and the user-visible result is identical.
-          const result = await exportNodeToImage(pages[i], filename);
-          lastResultMode = result.mode;
+          const dataUrl = await captureNodeAsDataUrl(pages[i]);
+          items.push({ dataUrl, filename });
         }
-        setToast(
-          pages.length === 1
-            ? lastResultMode === "shared"
-              ? "已分享"
-              : "已保存图片"
-            : `已保存 ${pages.length} 张图片`,
-        );
       }
+      setPreviewItems(items);
     } catch (err) {
       console.error(err);
-      setToast("导出失败，请重试");
+      setPreviewOpen(false);
+      setToast("生成失败，请重试");
+      setTimeout(() => setToast(null), 3200);
     } finally {
       setExporting(false);
+    }
+  }
+
+  /** Step 2: 用户在预览里点"下载全部" → 真正写文件 / 调起 share sheet。 */
+  async function handlePreviewDownload() {
+    if (!previewItems || previewItems.length === 0 || downloadingPreview)
+      return;
+    setDownloadingPreview(true);
+    try {
+      let lastMode: "shared" | "downloaded" | null = null;
+      for (const it of previewItems) {
+        const result = await downloadDataUrl(it.dataUrl, it.filename);
+        lastMode = result.mode;
+      }
+      setPreviewOpen(false);
+      setPreviewItems(undefined);
+      setToast(
+        previewItems.length === 1
+          ? lastMode === "shared"
+            ? "已分享"
+            : "已保存图片"
+          : `已保存 ${previewItems.length} 张图片`,
+      );
+    } catch (err) {
+      console.error(err);
+      setToast("下载失败，请重试");
+    } finally {
+      setDownloadingPreview(false);
       setTimeout(() => setToast(null), 3200);
     }
+  }
+
+  function handlePreviewClose() {
+    if (downloadingPreview) return;
+    setPreviewOpen(false);
+    setPreviewItems(undefined);
   }
 
   async function saveFee(key: FeeKey, next: Money | null) {
@@ -410,10 +455,10 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
           </label>
           <button
             onClick={handleExport}
-            disabled={exporting}
+            disabled={exporting || previewOpen}
             className="btn-primary disabled:opacity-60"
           >
-            {exporting ? "生成中…" : "导出分享图"}
+            {exporting ? "生成中…" : "生成图片"}
           </button>
         </div>
       </div>
@@ -824,6 +869,14 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
           onDelete();
         }}
         onCancel={() => setConfirmingDelete(false)}
+      />
+
+      <ExportPreview
+        open={previewOpen}
+        items={previewItems}
+        downloading={downloadingPreview}
+        onDownload={handlePreviewDownload}
+        onClose={handlePreviewClose}
       />
 
       {/* Measurement card: every section rendered in one tall column at
