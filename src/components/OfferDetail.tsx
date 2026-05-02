@@ -722,7 +722,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 flex-wrap">
-                      <span>{c.item}</span>
+                      <span className="font-semibold">{c.item}</span>
                       {c.status === "met" && (
                         <span className="text-xs text-emerald-600 dark:text-emerald-400">
                           ✓ 已满足
@@ -776,7 +776,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 flex-wrap">
                       <span
-                        className={`font-medium ${
+                        className={`font-semibold ${
                           m.priority === "high" ? "text-red-600 dark:text-red-400" : ""
                         }`}
                       >
@@ -830,7 +830,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                   className="flex items-start gap-3 text-ink-700 dark:text-ink-300 leading-relaxed"
                 >
                   <span className="mt-2 w-1.5 h-1.5 rounded-full bg-ink-500 shrink-0" />
-                  <span className="flex-1">{n}</span>
+                  <span className="flex-1 font-semibold">{n}</span>
                 </li>
               ))}
             </ul>

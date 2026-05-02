@@ -33,6 +33,33 @@ export function formatDate(iso: string | null | undefined): string {
   });
 }
 
+/** Strip the markdown formatting tokens we sometimes see leaked into
+ * user-visible text fields (action / item / note / details). Models
+ * occasionally wrap an emphasized phrase in **bold** even when the
+ * prompt forbids markdown — this returns plain text so the renderer
+ * can apply consistent font weights without literal asterisks
+ * showing through. */
+export function stripMarkdown(s: string | undefined | null): string {
+  if (!s) return "";
+  return s
+    // **bold** / __bold__
+    .replace(/\*\*([^*]+?)\*\*/g, "$1")
+    .replace(/__([^_]+?)__/g, "$1")
+    // *italic* / _italic_ — only when surrounded by non-alphanumeric or boundaries
+    .replace(/(^|[\s（(《"'])\*([^*\n]+?)\*(?=[\s）)》"'.,。，！？!?:;]|$)/g, "$1$2")
+    .replace(/(^|[\s（(《"'])_([^_\n]+?)_(?=[\s）)》"'.,。，！？!?:;]|$)/g, "$1$2")
+    // leading "- " / "* " bullet markers
+    .replace(/^\s*[-*]\s+/gm, "")
+    // leading "1. " / "1) " ordered markers
+    .replace(/^\s*\d+[.)]\s+/gm, "")
+    // leading "# " / "## " etc. headings
+    .replace(/^\s*#{1,6}\s+/gm, "")
+    // collapse stray triple+ asterisks/underscores
+    .replace(/\*{2,}/g, "")
+    .replace(/_{2,}/g, "")
+    .trim();
+}
+
 export function uuid(): string {
   if (crypto?.randomUUID) return crypto.randomUUID();
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {

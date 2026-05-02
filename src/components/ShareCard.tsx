@@ -375,7 +375,6 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
                 main={m.action}
                 details={m.details ?? undefined}
                 deadline={m.deadline ?? undefined}
-                emphasis={m.priority === "high"}
               />
             ))}
           </ol>
@@ -391,6 +390,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
                 style={{
                   fontSize: 15,
                   color: INK,
+                  fontWeight: 600,
                   lineHeight: 1.4,
                   paddingLeft: 20,
                   position: "relative",
@@ -632,14 +632,12 @@ function ListItem({
   details,
   deadline,
   isLast,
-  emphasis,
 }: {
   index: number;
   main: string;
   details?: string;
   deadline?: string;
   isLast?: boolean;
-  emphasis?: boolean;
 }) {
   return (
     <li
@@ -670,7 +668,10 @@ function ListItem({
             fontSize: 16,
             lineHeight: 1.4,
             color: INK,
-            fontWeight: emphasis ? 600 : 400,
+            // Always semibold so every action item title reads as the
+            // same weight; `emphasis` only controls color (red for
+            // high-priority todos), not weight.
+            fontWeight: 600,
             letterSpacing: "-0.005em",
           }}
         >

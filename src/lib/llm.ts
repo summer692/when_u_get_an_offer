@@ -1,5 +1,6 @@
 import { jsonrepair } from "jsonrepair";
-import type { ExtractedOffer, Provider } from "./schema";
+import type { ExtractedOffer, Condition, MustDo, Provider } from "./schema";
+import { stripMarkdown } from "./format";
 import type { ParsedInput } from "./parsers";
 import { getCachedExtraction, saveCachedExtraction } from "./db";
 
@@ -64,6 +65,12 @@ export const DEFAULT_MODEL = PROVIDERS.google.defaultModel;
 
 const SYSTEM_PROMPT = `你是 OfferLens 的信息抽取引擎。用户会给你一份学校录取通知（offer）的原文或图片。
 请**仅**输出一个 JSON 对象，遵循下方 schema，不要输出任何其它文字、注释或 markdown 包裹。
+
+⛔ 全文（包括 conditions[].item / conditions[].details / must_do[].action / must_do[].details / notes[] / info_gaps[]）**严禁**任何 markdown 标记：
+- ❌ 不要写 \`**加粗**\` / \`__加粗__\` / \`*斜体*\` / \`_斜体_\`
+- ❌ 不要在字符串里写 \`# 标题\` / \`## 标题\`
+- ❌ 不要在字符串里加 \`- 列表\` / \`1. 编号\`（数据本来就是数组，每条 item 已经隐含了编号）
+- 想强调某个词就用中文引号「」或者书名号《》。需要换行就用真实 \\n。
 
 Schema:
 {
@@ -495,7 +502,7 @@ export interface ExtractOptions {
  * a new prompt immediately without manually clearing storage. Bump whenever
  * SYSTEM_PROMPT changes in a way that would yield a meaningfully different
  * output (new field, stricter rules, etc.). */
-const PROMPT_VERSION = "v5-currency-whitelist";
+const PROMPT_VERSION = "v6-no-markdown";
 
 /** SHA-256 hash of the parsed input bytes plus the prompt version. Stable
  * across runs for the same file + prompt, so the same offer always maps to
@@ -775,14 +782,36 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     term_start_text: r?.term_start_text ?? undefined,
     key_dates: Array.isArray(r?.key_dates) ? r!.key_dates : [],
     fees: normalizeFees(r?.fees),
-    conditions: Array.isArray(r?.conditions) ? r!.conditions : [],
-    must_do: Array.isArray(r?.must_do) ? r!.must_do : [],
+    conditions: Array.isArray(r?.conditions)
+      ? (r!.conditions as Condition[])
+          .map((c) => ({
+            ...c,
+            item: stripMarkdown(c?.item),
+            details: c?.details ? stripMarkdown(c.details) : c?.details,
+          }))
+          .filter((c) => !!c.item)
+      : [],
+    must_do: Array.isArray(r?.must_do)
+      ? (r!.must_do as MustDo[])
+          .map((m) => ({
+            ...m,
+            action: stripMarkdown(m?.action),
+            details: m?.details ? stripMarkdown(m.details) : m?.details,
+          }))
+          .filter((m) => !!m.action)
+      : [],
     raw_highlights: Array.isArray(r?.raw_highlights) ? r!.raw_highlights : [],
     notes: Array.isArray(r?.notes)
-      ? r!.notes.filter((s): s is string => typeof s === "string" && !!s.trim())
+      ? r!.notes
+          .filter((s): s is string => typeof s === "string" && !!s.trim())
+          .map(stripMarkdown)
+          .filter(Boolean)
       : [],
     info_gaps: Array.isArray(r?.info_gaps)
-      ? r!.info_gaps.filter((s): s is string => typeof s === "string" && !!s.trim())
+      ? r!.info_gaps
+          .filter((s): s is string => typeof s === "string" && !!s.trim())
+          .map(stripMarkdown)
+          .filter(Boolean)
       : [],
     summary:
       typeof r?.summary === "string" && r!.summary.trim()
