@@ -592,13 +592,26 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                   </button>
                 </span>
               ) : offer.duration ? (
-                <button
-                  onClick={() => setEditingDuration(true)}
-                  className="hover:underline underline-offset-4"
-                  title="点击修改"
-                >
-                  {offer.duration}
-                </button>
+                <span className="inline-flex items-baseline gap-2">
+                  <button
+                    onClick={() => setEditingDuration(true)}
+                    className={`hover:underline underline-offset-4 ${
+                      offer.researched_fields?.includes("duration")
+                        ? "text-ink-500"
+                        : ""
+                    }`}
+                    title="点击修改"
+                  >
+                    {offer.researched_fields?.includes("duration")
+                      ? `~ ${offer.duration}`
+                      : offer.duration}
+                  </button>
+                  {offer.researched_fields?.includes("duration") && (
+                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      参考值 · 来自官网
+                    </span>
+                  )}
+                </span>
               ) : (
                 <button
                   onClick={() => setEditingDuration(true)}
@@ -621,6 +634,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               school={schoolZh}
               program={offer.program}
               onEdit={() => setEditingFee("tuition")}
+              researched={offer.researched_fields?.includes("tuition")}
             />
             <FeeBlock
               title="留位费"
@@ -628,6 +642,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               school={schoolZh}
               program={offer.program}
               onEdit={() => setEditingFee("deposit")}
+              researched={offer.researched_fields?.includes("deposit")}
             />
             <FeeBlock
               title="奖学金"
@@ -635,6 +650,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               school={schoolZh}
               program={offer.program}
               onEdit={() => setEditingFee("scholarship")}
+              researched={offer.researched_fields?.includes("scholarship")}
             />
           </div>
         </Section>
@@ -1030,19 +1046,48 @@ function FeeBlock({
   school,
   program,
   onEdit,
+  researched,
 }: {
   title: string;
   money?: Money | null;
   school: string;
   program: string;
   onEdit: () => void;
+  /** True when this field's value was filled in by researchOffer (Gemini
+   * + grounded web search) rather than read directly off the offer. */
+  researched?: boolean;
 }) {
   const value = formatMoney(money);
   const verified = money?.manually_edited;
-  const partial = money?.is_partial && !verified;
-  const estimate = money?.is_estimate && !verified && !partial;
-  const showApprox = estimate;
+  const isMissing = !money || money.amount === 0;
+  const isEstimate = money?.is_estimate && !verified;
+  const isPartial = money?.is_partial && !verified && !isEstimate;
   const isDeposit = title === "留位费";
+  // Trust level (see schema doc on researched_fields):
+  //   1 — read off the offer (or user-verified). Display as authoritative.
+  //   2 — system-supplied (researched from school site OR LLM-estimated
+  //       from per-credit math). Display with "~", muted color, warning.
+  //   3 — missing entirely. Display "—" + a red prompt to look it up.
+  const level: 1 | 2 | 3 =
+    verified
+      ? 1
+      : isMissing
+      ? 3
+      : researched || isEstimate
+      ? 2
+      : 1;
+
+  const valueClass =
+    level === 3
+      ? "text-ink-300 dark:text-ink-700"
+      : level === 2
+      ? "text-ink-500 dark:text-ink-400"
+      : "";
+
+  const sourceLinkClass =
+    level === 2
+      ? "text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+      : "text-ink-500 hover:text-ink-900 dark:hover:text-white";
 
   return (
     <div
@@ -1053,21 +1098,46 @@ function FeeBlock({
         <div className="section-label">{title}</div>
         <div className="flex items-center gap-1.5">
           {verified && <Badge tone="green">已校对</Badge>}
-          {partial && <Badge tone="amber">首期 / 不完整</Badge>}
-          {estimate && <Badge tone="amber">估算</Badge>}
+          {level === 2 && (
+            <Badge tone="amber">
+              {researched
+                ? "参考值 · 来自官网"
+                : isPartial
+                ? "首期 / 不完整"
+                : "参考值 · 系统估算"}
+            </Badge>
+          )}
           <span className="text-ink-300 dark:text-ink-700 text-[10px] uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
             编辑
           </span>
         </div>
       </div>
-      <div className="mt-4 text-3xl font-display font-medium tabular tracking-tight">
-        {showApprox && value !== "—" ? `≈ ${value}` : value}
+      <div className={`mt-4 text-3xl font-display font-medium tabular tracking-tight ${valueClass}`}>
+        {level === 3 ? "—" : level === 2 && value !== "—" ? `~ ${value}` : value}
       </div>
-      {money?.note && (
+
+      {level === 2 && researched && (
+        <div className="mt-3 text-xs text-ink-500 leading-relaxed">
+          <span className="text-amber-600 dark:text-amber-400">⚠️</span>{" "}
+          offer 原文未提供，以上为系统从 {school} 官网查询的{title}。建议交费前去官网核对。
+        </div>
+      )}
+      {level === 2 && !researched && money?.note && (
         <div className="mt-3 text-xs text-ink-500 leading-relaxed">
           {money.note}
         </div>
       )}
+      {level === 1 && money?.note && (
+        <div className="mt-3 text-xs text-ink-500 leading-relaxed">
+          {money.note}
+        </div>
+      )}
+      {level === 3 && (
+        <div className="mt-3 text-xs text-red-600 dark:text-red-400 leading-relaxed">
+          offer 未提供明确金额，建议手动查询学校官网
+        </div>
+      )}
+
       {money && money.amount > 0 && (
         money.source ? (
           <a
@@ -1075,9 +1145,9 @@ function FeeBlock({
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mt-4 inline-flex items-center gap-1 text-xs underline underline-offset-4 text-ink-500 hover:text-ink-900 dark:hover:text-white"
+            className={`mt-4 inline-flex items-center gap-1 text-xs underline underline-offset-4 ${sourceLinkClass}`}
           >
-            via {hostOf(money.source)} ↗
+            {level === 2 ? "去官网核对" : `via ${hostOf(money.source)}`} ↗
           </a>
         ) : isDeposit ? (
           <div className="mt-4 text-xs text-ink-500">
@@ -1089,7 +1159,7 @@ function FeeBlock({
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mt-4 inline-flex items-center gap-1 text-xs underline underline-offset-4 text-ink-500 hover:text-ink-900 dark:hover:text-white"
+            className={`mt-4 inline-flex items-center gap-1 text-xs underline underline-offset-4 ${sourceLinkClass}`}
           >
             去官网核对 ↗
           </a>

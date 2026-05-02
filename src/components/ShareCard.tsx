@@ -306,7 +306,11 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           gap: 24,
         }}
       >
-        <Spec label="学制" value={offer.duration ?? "—"} />
+        <Spec
+          label="学制"
+          value={offer.duration ?? "—"}
+          researched={offer.researched_fields?.includes("duration") ?? false}
+        />
         <Spec label="入学" value={termStartDisplay ?? "—"} tone="date" />
         <Spec
           label="学院"
@@ -326,9 +330,21 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           gap: 24,
         }}
       >
-        <Fee label="学费" money={offer.fees?.tuition} />
-        <Fee label="留位费" money={offer.fees?.deposit} />
-        <Fee label="奖学金" money={offer.fees?.scholarship} />
+        <Fee
+          label="学费"
+          money={offer.fees?.tuition}
+          researched={offer.researched_fields?.includes("tuition") ?? false}
+        />
+        <Fee
+          label="留位费"
+          money={offer.fees?.deposit}
+          researched={offer.researched_fields?.includes("deposit") ?? false}
+        />
+        <Fee
+          label="奖学金"
+          money={offer.fees?.scholarship}
+          researched={offer.researched_fields?.includes("scholarship") ?? false}
+        />
       </div>}
 
       {showConditions && offer.conditions && offer.conditions.length > 0 && (
@@ -438,11 +454,16 @@ function Spec({
   label,
   value,
   tone = "default",
+  researched = false,
 }: {
   label: string;
   value: string;
   tone?: "default" | "date";
+  /** True when value came from researchOffer rather than the offer text. */
+  researched?: boolean;
 }) {
+  const isMissing = value === "—";
+  const showResearched = researched && !isMissing;
   return (
     <div>
       <div
@@ -460,24 +481,55 @@ function Spec({
       <div
         style={{
           fontSize: 20,
-          color: tone === "date" && value !== "—" ? DATE_RED : INK,
-          fontWeight: tone === "date" && value !== "—" ? 600 : 500,
+          color: showResearched
+            ? SUB
+            : tone === "date" && !isMissing
+            ? DATE_RED
+            : INK,
+          fontWeight: tone === "date" && !isMissing ? 600 : 500,
           letterSpacing: "-0.01em",
           fontVariantNumeric: "tabular-nums",
           lineHeight: 1.3,
         }}
       >
-        {value}
+        {showResearched ? `~ ${value}` : value}
       </div>
+      {showResearched && (
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 11,
+            color: MUTE,
+            letterSpacing: "0.02em",
+          }}
+        >
+          参考值 · 来自官网
+        </div>
+      )}
     </div>
   );
 }
 
-function Fee({ label, money }: { label: string; money?: Money | null }) {
+function Fee({
+  label,
+  money,
+  researched = false,
+}: {
+  label: string;
+  money?: Money | null;
+  /** True when this number came from researchOffer (gemini + grounded
+   * web search) rather than from the offer's text. */
+  researched?: boolean;
+}) {
   const value = formatMoney(money);
-  const showApprox =
-    money && money.is_estimate && !money.manually_edited && value !== "—";
-  const isEmpty = value === "—";
+  const verified = money?.manually_edited;
+  const isMissing = !money || money.amount === 0;
+  const isEstimate = money?.is_estimate && !verified;
+  const isPartial = money?.is_partial && !verified && !isEstimate;
+  const level: 1 | 2 | 3 =
+    verified ? 1 : isMissing ? 3 : researched || isEstimate ? 2 : 1;
+  const valueColor =
+    level === 3 ? MUTE : level === 2 ? SUB : INK;
   return (
     <div>
       <div
@@ -491,21 +543,33 @@ function Fee({ label, money }: { label: string; money?: Money | null }) {
         }}
       >
         {label}
-        {money?.is_partial && !money.manually_edited && " · 首期"}
+        {isPartial && " · 首期"}
       </div>
       <div
         style={{
           fontSize: 30,
-          color: isEmpty ? MUTE : INK,
+          color: valueColor,
           fontWeight: 500,
           letterSpacing: "-0.03em",
           fontVariantNumeric: "tabular-nums",
           lineHeight: 1.05,
         }}
       >
-        {showApprox ? `≈ ${value}` : value}
+        {level === 3 ? "—" : level === 2 && value !== "—" ? `~ ${value}` : value}
       </div>
-      {money?.note && (
+      {level === 2 && (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 11,
+            color: MUTE,
+            letterSpacing: "0.02em",
+          }}
+        >
+          参考值 · {researched ? "来自官网" : "系统估算"}
+        </div>
+      )}
+      {level === 1 && money?.note && (
         <div
           style={{
             marginTop: 10,
@@ -515,6 +579,18 @@ function Fee({ label, money }: { label: string; money?: Money | null }) {
           }}
         >
           {money.note}
+        </div>
+      )}
+      {level === 3 && (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 11,
+            color: MUTE,
+            letterSpacing: "0.02em",
+          }}
+        >
+          offer 未提供
         </div>
       )}
     </div>

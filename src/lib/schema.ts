@@ -111,6 +111,13 @@ export interface ExtractedOffer {
    * truncate (tone, conditional warnings, payment quirks, language of
    * instruction, special arrangements, scholarship strings attached, etc.). */
   summary?: string;
+  /** Names of top-level fields whose value did NOT come from the offer
+   * itself but was filled in by the researchOffer step (Gemini + grounded
+   * web search against the school's site). Recognized values today:
+   * "tuition", "scholarship", "duration". UI uses this to render a
+   * "参考值 · 来自官网" trust label so the student can tell at a glance
+   * which numbers were transcribed vs. inferred. */
+  researched_fields?: string[];
 }
 
 export interface Offer extends ExtractedOffer {

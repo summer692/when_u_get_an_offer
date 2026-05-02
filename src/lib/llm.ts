@@ -476,7 +476,7 @@ export interface ExtractOptions {
  * a new prompt immediately without manually clearing storage. Bump whenever
  * SYSTEM_PROMPT changes in a way that would yield a meaningfully different
  * output (new field, stricter rules, etc.). */
-const PROMPT_VERSION = "v3-briefing";
+const PROMPT_VERSION = "v4-trust-levels";
 
 /** SHA-256 hash of the parsed input bytes plus the prompt version. Stable
  * across runs for the same file + prompt, so the same offer always maps to
@@ -769,6 +769,9 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
       typeof r?.summary === "string" && r!.summary.trim()
         ? r!.summary.trim()
         : undefined,
+    // Fresh extractions always start with no researched fields — only
+    // applyResearch promotes a field into this set later.
+    researched_fields: [],
   };
   out.info_gaps = pruneInfoGaps(out);
   return out;
@@ -974,10 +977,13 @@ export function applyResearch<T extends ExtractedOffer>(
   research: ResearchResult,
 ): T {
   const merged: T = { ...offer, fees: { ...(offer.fees ?? {}) } };
+  // Track which fields the research step actually filled in. The UI uses
+  // this set to render a "参考值 · 来自官网" trust label so the student
+  // can tell offer-extracted numbers from school-website-looked-up ones.
+  const researched = new Set<string>(merged.researched_fields ?? []);
+
   if (research.tuition) {
     const existing = merged.fees!.tuition;
-    // Don't overwrite values the user explicitly verified, or values the
-    // offer itself stated authoritatively (no estimate / partial flags).
     const existingIsAuthoritative =
       existing &&
       existing.amount > 0 &&
@@ -991,14 +997,22 @@ export function applyResearch<T extends ExtractedOffer>(
         is_partial: false,
         is_estimate: false,
       };
+      researched.add("tuition");
+    } else if (userVerified || existingIsAuthoritative) {
+      // The offer itself was authoritative — make sure we don't claim it
+      // as "researched" if a previous run had marked it so.
+      researched.delete("tuition");
     }
   }
   if (research.scholarship && !merged.fees!.scholarship) {
     merged.fees!.scholarship = research.scholarship;
+    researched.add("scholarship");
   }
   if (research.duration && !merged.duration) {
     merged.duration = research.duration;
+    researched.add("duration");
   }
+  merged.researched_fields = [...researched];
   merged.info_gaps = pruneInfoGaps(merged);
   return merged;
 }
