@@ -2,27 +2,35 @@ import { forwardRef, useLayoutEffect, useRef, useState } from "react";
 import type { Money, MustDo, Offer } from "../lib/schema";
 import { formatDate, formatMoney } from "../lib/format";
 
+export type SectionId = "specs" | "fees" | "conditions" | "todos" | "notes";
+export const ALL_SECTIONS: readonly SectionId[] = [
+  "specs",
+  "fees",
+  "conditions",
+  "todos",
+  "notes",
+];
+
 interface Props {
   offer: Offer;
   agencyName?: string;
   agencyLogo?: string;
-  /** 1 = hero/specs/fees, 2 = conditions+todos, 3 = notes. Defaults to 1.
-   * Only the pages that have content render; OfferDetail decides which. */
-  page?: 1 | 2 | 3;
-  /** Total pages being exported, for the "n / total" indicator. */
+  /** Which flow sections to render on this page (in order). When omitted, all
+   * sections are rendered (used by the measurement pass + the legacy single-
+   * page path). */
+  sections?: readonly SectionId[];
+  /** True for page 1 — shows the big greeting + school + program hero.
+   * False for continuation pages — shows a small school·program caption
+   * instead so a standalone share is still self-contained. */
+  isFirstPage?: boolean;
+  /** For the "n / total" footer indicator. Hidden when totalPages == 1. */
+  pageNum?: number;
   totalPages?: number;
-}
-
-/** Decide how many 1080×1920 pages this offer needs to fit without
- * truncating any list. Page 1 is always present. */
-export function computeTotalPages(offer: Offer): number {
-  const conditionCount = offer.conditions?.length ?? 0;
-  const todoCount = offer.must_do?.length ?? 0;
-  const noteCount = offer.notes?.length ?? 0;
-  let pages = 1;
-  if (conditionCount > 0 || todoCount > 0) pages += 1;
-  if (noteCount > 0) pages += 1;
-  return pages;
+  /** Measurement mode: render BOTH chrome variants and EVERY section, with
+   * height: auto / overflow: visible, so OfferDetail can read each section's
+   * natural height to compute page assignments. Visually unused (host renders
+   * it offscreen). */
+  measureMode?: boolean;
 }
 
 const W = 720;
@@ -52,12 +60,26 @@ const HAIRLINE_STRONG = "#0A0A0A";
 const DATE_RED = "#D70015";
 
 export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
-  { offer, agencyName, agencyLogo, page = 1, totalPages = 1 },
+  {
+    offer,
+    agencyName,
+    agencyLogo,
+    sections,
+    isFirstPage = true,
+    pageNum = 1,
+    totalPages = 1,
+    measureMode = false,
+  },
   ref,
 ) {
-  const showHero = page === 1;
-  const showLists = page === 2;
-  const showNotes = page === 3;
+  const visibleSections = measureMode ? ALL_SECTIONS : sections ?? ALL_SECTIONS;
+  const showHero = measureMode || isFirstPage;
+  const showCaption = measureMode || !isFirstPage;
+  const showSpecs = visibleSections.includes("specs");
+  const showFees = visibleSections.includes("fees");
+  const showConditions = visibleSections.includes("conditions");
+  const showTodos = visibleSections.includes("todos");
+  const showNotes = visibleSections.includes("notes");
   const today = new Date();
   const dateStamp = `${today.getFullYear()}.${pad(today.getMonth() + 1)}.${pad(
     today.getDate(),
@@ -83,7 +105,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   const [scale, setScale] = useState(1);
 
   useLayoutEffect(() => {
-    if (!innerRef.current) return;
+    // Measurement mode never auto-scales — we want the natural heights so
+    // OfferDetail can read each section accurately.
+    if (measureMode || !innerRef.current) return;
     const naturalH = innerRef.current.scrollHeight;
     const next =
       naturalH <= H ? 1 : Math.max(MIN_SCALE, H / naturalH);
@@ -95,9 +119,12 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       ref={ref}
       style={{
         width: W,
-        height: H,
+        // Measure mode lets the inner grow naturally so we can read each
+        // section's true height. Export mode hard-clips at H so html-to-image
+        // captures exactly the 1080×1920 frame.
+        height: measureMode ? "auto" : H,
         backgroundColor: BG,
-        overflow: "hidden",
+        overflow: measureMode ? "visible" : "hidden",
         position: "relative",
       }}
     >
@@ -105,7 +132,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         ref={innerRef}
         style={{
           width: W,
-          minHeight: H,
+          minHeight: measureMode ? 0 : H,
           color: INK,
           fontFamily: fontStack,
           padding: `${PAD_T}px ${PAD_X}px ${PAD_B}px`,
@@ -114,20 +141,14 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           letterSpacing: 0,
           display: "flex",
           flexDirection: "column",
-          // Center the typography itself — without this the safe-margin
-          // padding pushes the natural-width text to the left edge of the
-          // 720 inner, and the export reads as "left-leaning" even at
-          // scale = 1. Lists override back to text-align:left per item
-          // because numbered rows look broken when centered.
           textAlign: "center",
-          transform: `scale(${scale})`,
-          // Anchor the scale to top-center so an overflowing offer shrinks
-          // symmetrically into the frame instead of clinging to the left edge.
+          transform: measureMode ? "none" : `scale(${scale})`,
           transformOrigin: "50% 0",
         }}
       >
       {/* Brand strip — country left, agency right, separated by hairline */}
       <div
+        data-chrome="brand"
         style={{
           display: "flex",
           alignItems: "center",
@@ -172,8 +193,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
 
       {/* Pages 2-3 caption: school + program in one line so a continuation
           page is still self-contained when shared standalone. */}
-      {!showHero && (
+      {showCaption && (
         <div
+          data-chrome="caption"
           style={{
             marginTop: 18,
             fontSize: 14,
@@ -188,7 +210,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         </div>
       )}
 
-      {showHero && <>
+      {showHero && <div data-chrome="hero">
       {/* Greeting */}
       <div style={{ marginTop: 36, marginBottom: 22 }}>
         <div
@@ -259,9 +281,11 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           </div>
         )}
       </div>
+      </div>}
 
       {/* Specs row — keynote spec sheet */}
-      <div
+      {showSpecs && <div
+        data-section="specs"
         style={{
           marginTop: 32,
           paddingTop: 18,
@@ -279,10 +303,11 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           label="学院"
           value={facultyZh ?? offer.student_category ?? "—"}
         />
-      </div>
+      </div>}
 
       {/* Fees — big numbers */}
-      <div
+      {showFees && <div
+        data-section="fees"
         style={{
           marginTop: 18,
           paddingBottom: 22,
@@ -295,11 +320,10 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         <Fee label="学费" money={offer.fees?.tuition} />
         <Fee label="留位费" money={offer.fees?.deposit} />
         <Fee label="奖学金" money={offer.fees?.scholarship} />
-      </div>
-      </>}
+      </div>}
 
-      {showLists && offer.conditions && offer.conditions.length > 0 && (
-        <Section title="录取条件">
+      {showConditions && offer.conditions && offer.conditions.length > 0 && (
+        <Section title="录取条件" dataId="conditions">
           <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
             {offer.conditions.map((c, i) => (
               <ListItem
@@ -315,8 +339,8 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         </Section>
       )}
 
-      {showLists && todos.length > 0 && (
-        <Section title="接下来你要做的">
+      {showTodos && todos.length > 0 && (
+        <Section title="接下来你要做的" dataId="todos">
           <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
             {todos.map((m, i) => (
               <ListItem
@@ -334,7 +358,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       )}
 
       {showNotes && offer.notes && offer.notes.length > 0 && (
-        <Section title="重要备注">
+        <Section title="重要备注" dataId="notes">
           <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
             {offer.notes.map((n, i) => (
               <li
@@ -369,6 +393,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
       {/* Footer — pinned to the bottom on short offers via marginTop:auto;
           flows naturally at the end of content on long offers. */}
       <div
+        data-chrome="footer"
         style={{
           marginTop: "auto",
           paddingTop: 18,
@@ -390,7 +415,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           {dateStamp}
           {totalPages > 1 && (
             <span style={{ marginLeft: 14, color: MUTE, fontWeight: 500 }}>
-              {page} / {totalPages}
+              {pageNum} / {totalPages}
             </span>
           )}
         </span>
@@ -490,12 +515,14 @@ function Fee({ label, money }: { label: string; money?: Money | null }) {
 function Section({
   title,
   children,
+  dataId,
 }: {
   title: string;
   children: React.ReactNode;
+  dataId?: string;
 }) {
   return (
-    <section style={{ marginTop: 32 }}>
+    <section data-section={dataId} style={{ marginTop: 32 }}>
       <h2
         style={{
           fontSize: 16,

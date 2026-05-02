@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Condition, Money, MustDo, Offer, Settings } from "../lib/schema";
 import { daysUntil, formatDaysLeft } from "../lib/countdown";
 import { formatDate, formatMoney } from "../lib/format";
 import { getSettings } from "../lib/db";
 import { exportNodeToImage, safeFilename } from "../lib/exportImage";
-import { ShareCard, computeTotalPages } from "./ShareCard";
+import { ALL_SECTIONS, ShareCard, type SectionId } from "./ShareCard";
 import { MoneyEditor } from "./MoneyEditor";
 import { applyResearch, pruneInfoGaps, researchOffer } from "../lib/llm";
 
@@ -29,8 +29,14 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   // (which html-to-image scales 1.5× to a 1080×1920 PNG). Multi-page mode
   // produces independent PNGs, not one tall image.
   const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const measureRef = useRef<HTMLDivElement>(null);
   const feesRef = useRef<HTMLDivElement>(null);
-  const totalPages = computeTotalPages(offer);
+  // Page assignments are computed by measuring section heights against the
+  // available content area of a 1080×1920 frame. Default to "everything on
+  // page 1" so the export still works on first paint before measurement.
+  const [pageAssignments, setPageAssignments] = useState<SectionId[][]>([
+    [...ALL_SECTIONS],
+  ]);
 
   function scrollToFees() {
     feesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -75,13 +81,111 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     setDurationDraft(offer.duration ?? "");
   }, [offer.duration]);
 
+  // Greedy page packer: render every section in a hidden measurement card,
+  // measure each section's natural height + the chrome (brand strip / hero /
+  // caption / footer), then walk the section list in order and start a new
+  // page only when the next section won't fit on the current one. The hero
+  // is fixed to page 1; pages 2+ have a slim caption instead.
+  useLayoutEffect(() => {
+    const node = measureRef.current;
+    if (!node) return;
+    function getBoxHeight(selector: string): number {
+      const el = node!.querySelector<HTMLElement>(selector);
+      if (!el) return 0;
+      const cs = window.getComputedStyle(el);
+      return (
+        el.offsetHeight +
+        parseFloat(cs.marginTop || "0") +
+        parseFloat(cs.marginBottom || "0")
+      );
+    }
+
+    const brandH = getBoxHeight('[data-chrome="brand"]');
+    const heroH = getBoxHeight('[data-chrome="hero"]');
+    const captionH = getBoxHeight('[data-chrome="caption"]');
+    const footerH = getBoxHeight('[data-chrome="footer"]');
+
+    const sectionHeights: Partial<Record<SectionId, number>> = {};
+    for (const id of ALL_SECTIONS) {
+      sectionHeights[id] = getBoxHeight(`[data-section="${id}"]`);
+    }
+
+    // Internal coords are 720×1280 (×1.5 → 1080×1920). Translate to output
+    // pixels for the console log so the numbers match the user's mental
+    // model of "1920-tall canvas".
+    const FRAME_INTERIOR = 1280 - 56 - 48; // PAD_T + PAD_B
+    const HAIRLINE = 1; // the strong hairline between brand strip & content
+    const PAGE1_AVAIL = FRAME_INTERIOR - brandH - HAIRLINE - heroH - footerH;
+    const PAGEN_AVAIL = FRAME_INTERIOR - brandH - HAIRLINE - captionH - footerH;
+    const toOut = (n: number) => Math.round(n * 1.5);
+
+    const visible = ALL_SECTIONS.filter((id) => (sectionHeights[id] ?? 0) > 0);
+    if (visible.length === 0) {
+      setPageAssignments([[]]);
+      return;
+    }
+
+    const pages: SectionId[][] = [[]];
+    let used = 0;
+    let pageIdx = 0;
+    let avail = PAGE1_AVAIL;
+
+    console.log(
+      `📄 拆页测量｜brand ${toOut(brandH)} · hero ${toOut(heroH)} · caption ${toOut(captionH)} · footer ${toOut(footerH)} → p1 可用 ${toOut(PAGE1_AVAIL)}px / p2+ 可用 ${toOut(PAGEN_AVAIL)}px`,
+    );
+
+    for (const id of visible) {
+      const h = sectionHeights[id] ?? 0;
+      const fits = used + h <= avail;
+      const verdict = fits
+        ? "是"
+        : pages[pageIdx].length > 0
+        ? "否，换页"
+        : "否（已在空页起点，强制放入，由 auto-scale 兜底）";
+      console.log(
+        `p${pageIdx + 1} 累计 ${toOut(used)}px / 可用 ${toOut(avail)}px → 还能塞下"${id}"(${toOut(h)}px)? ${verdict}`,
+      );
+      if (!fits && pages[pageIdx].length > 0) {
+        pageIdx++;
+        pages.push([]);
+        avail = PAGEN_AVAIL;
+        used = 0;
+      }
+      pages[pageIdx].push(id);
+      used += h;
+    }
+
+    console.log(
+      `📄 拆页结果：${pages.length} 页 — ${pages
+        .map((p, i) => `p${i + 1}=[${p.join(", ")}]`)
+        .join(" | ")}`,
+    );
+
+    setPageAssignments((prev) => {
+      // Avoid re-rendering when assignments are equal (prevents loop on
+      // measurement re-runs caused by the resulting render).
+      if (
+        prev.length === pages.length &&
+        prev.every(
+          (p, i) =>
+            p.length === pages[i].length && p.every((s, j) => s === pages[i][j]),
+        )
+      ) {
+        return prev;
+      }
+      return pages;
+    });
+  }, [offer]);
+
   async function handleExport() {
     if (exporting) return;
     if (isDirty) {
       flashToast("有未保存的修改，请先点「确认修改」再导出图片", 3500);
       return;
     }
-    const pages = cardRefs.current.slice(0, totalPages).filter(Boolean) as HTMLDivElement[];
+    const pages = cardRefs.current
+      .slice(0, pageAssignments.length)
+      .filter(Boolean) as HTMLDivElement[];
     if (pages.length === 0) return;
     setExporting(true);
     try {
@@ -643,6 +747,9 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         onCancel={() => setConfirming(null)}
       />
 
+      {/* Measurement card: every section rendered in one tall column at
+          natural height. The page packer reads each section's offsetHeight
+          via data-* attributes to decide where to break pages. */}
       <div
         aria-hidden
         style={{
@@ -653,7 +760,28 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
           zIndex: -1,
         }}
       >
-        {Array.from({ length: totalPages }).map((_, i) => (
+        <ShareCard
+          ref={measureRef}
+          offer={offer}
+          agencyName={agency.agencyName}
+          agencyLogo={agency.agencyLogo}
+          measureMode
+        />
+      </div>
+
+      {/* Export cards — one per page assignment. Each is a real 720×1280
+          frame ready for html-to-image to capture at 1.5× → 1080×1920. */}
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          top: 0,
+          left: -10000,
+          pointerEvents: "none",
+          zIndex: -1,
+        }}
+      >
+        {pageAssignments.map((sections, i) => (
           <ShareCard
             key={i}
             ref={(el) => {
@@ -662,8 +790,10 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
             offer={offer}
             agencyName={agency.agencyName}
             agencyLogo={agency.agencyLogo}
-            page={(i + 1) as 1 | 2 | 3}
-            totalPages={totalPages}
+            sections={sections}
+            isFirstPage={i === 0}
+            pageNum={i + 1}
+            totalPages={pageAssignments.length}
           />
         ))}
       </div>
