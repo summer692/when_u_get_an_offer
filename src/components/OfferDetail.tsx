@@ -9,7 +9,7 @@ import { ALL_SECTIONS, ShareCard, type SectionId } from "./ShareCard";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MoneyEditor } from "./MoneyEditor";
 import { ExportPreview, type PreviewItem } from "./ExportPreview";
-import { applyResearch, pruneInfoGaps, researchOffer } from "../lib/llm";
+import { pruneInfoGaps } from "../lib/llm";
 import {
   defaultShareVisible,
   hideAllEmptyFields,
@@ -65,7 +65,6 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   const [editingFee, setEditingFee] = useState<FeeKey | null>(null);
   const [editingDuration, setEditingDuration] = useState(false);
   const [durationDraft, setDurationDraft] = useState(offer.duration ?? "");
-  const [researching, setResearching] = useState(false);
 
   // Inline editing for the three list sections (录取条件 / 接下来要做的 /
   // 重要备注). Each section can be opened independently; pending edits live
@@ -326,42 +325,6 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     flashToast("已保存");
   }
 
-  async function rerunResearch() {
-    if (researching) return;
-    setResearching(true);
-    try {
-      const settings = await getSettings();
-      if (!settings.apiKey) {
-        flashToast("请先在设置中填入 API Key", 3000);
-        return;
-      }
-      if ((settings.provider ?? "google") !== "google") {
-        flashToast("仅 Google AI Studio 支持官网查询", 3000);
-        return;
-      }
-      flashToast(`正在查 ${schoolZh} 官网…`, 60000);
-      const research = await researchOffer(offer, { apiKey: settings.apiKey });
-      if (!research) {
-        flashToast("没有从官网查到新内容", 3000);
-        return;
-      }
-      const merged = applyResearch(offer, research);
-      await onUpdate(merged);
-      const got = [
-        research.tuition && "学费",
-        research.duration && "学制",
-        research.scholarship && "奖学金",
-      ]
-        .filter(Boolean)
-        .join("、");
-      flashToast(got ? `已从官网补全：${got}` : "没有从官网查到新内容", 3000);
-    } catch (err) {
-      console.error(err);
-      flashToast("查询失败，请稍后再试", 3000);
-    } finally {
-      setResearching(false);
-    }
-  }
 
   async function saveDuration() {
     const next = durationDraft.trim() || undefined;
@@ -780,17 +743,29 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
       })()}
 
       {(offer.fees?.tuition?.is_estimate || offer.fees?.tuition?.is_partial) &&
-        !offer.info_gaps?.length && (
-          <div className="mb-12 -mt-4">
-            <button
-              onClick={rerunResearch}
-              disabled={researching}
-              className="text-xs px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors disabled:opacity-60"
-            >
-              {researching ? "查询中…" : `重新查 ${schoolZh} 官网补全学费`}
-            </button>
-          </div>
-        )}
+        !offer.info_gaps?.length && (() => {
+          const verifiedUrl =
+            offer.fees?.tuition?.source ?? offer.fees?.scholarship?.source;
+          return (
+            <div className="mb-12 -mt-4 text-xs text-amber-800 dark:text-amber-300">
+              {verifiedUrl ? (
+                <>
+                  此为参考值，建议核对
+                  <a
+                    href={verifiedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-1 underline underline-offset-4 hover:text-amber-900 dark:hover:text-amber-100"
+                  >
+                    → 打开学校官网
+                  </a>
+                </>
+              ) : (
+                "此为参考值，建议手动核对学费"
+              )}
+            </div>
+          );
+        })()}
 
       {(offer.conditions?.length || editing === "conditions") && (
         <EditableSection
