@@ -2,7 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import type { Money } from "../lib/schema";
 import { Modal } from "./Modal";
 
-const CURRENCIES = ["HKD", "USD", "GBP", "EUR", "CNY", "SGD", "AUD", "CAD", "JPY", "KRW"];
+// Display label = ISO code + Chinese annotation; the underlying value the
+// schema stores is still the bare ISO. Order matches the prompt whitelist.
+const CURRENCY_OPTIONS: { code: string; label: string }[] = [
+  { code: "HKD", label: "HKD（港币）" },
+  { code: "USD", label: "USD（美元）" },
+  { code: "GBP", label: "GBP（英镑）" },
+  { code: "EUR", label: "EUR（欧元）" },
+  { code: "CNY", label: "CNY（人民币）" },
+  { code: "SGD", label: "SGD（新加坡元）" },
+  { code: "AUD", label: "AUD（澳元）" },
+  { code: "CAD", label: "CAD（加元）" },
+  { code: "JPY", label: "JPY（日元）" },
+  { code: "KRW", label: "KRW（韩元）" },
+];
 
 interface Props {
   open: boolean;
@@ -86,8 +99,10 @@ export function MoneyEditor({ open, title, initial, onClose, onSave }: Props) {
                 onChange={(e) => setCurrency(e.target.value)}
                 className="w-full px-3 py-3 rounded-xl bg-ink-100 dark:bg-black border border-transparent focus:border-accent focus:outline-none transition-colors"
               >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                {CURRENCY_OPTIONS.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
+                  </option>
                 ))}
               </select>
             </div>
