@@ -554,7 +554,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
                 if (!offer.summary) return;
                 try {
                   await navigator.clipboard.writeText(offer.summary);
-                  flashToast("已复制，可粘贴发学生");
+                  flashToast("已复制全文，可一键转发保存");
                 } catch {
                   flashToast("复制失败，请手动选择文本", 2400);
                 }
