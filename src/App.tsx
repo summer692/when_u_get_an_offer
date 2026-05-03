@@ -63,7 +63,7 @@ export default function App() {
           !programIsComplete(extracted);
 
         if (needsResearch && provider === "google") {
-          setStage("OfferLens 正在查官网补全......");
+          setStage("OfferLens 正在查询官网补全信息......");
           try {
             const research = await researchOffer(extracted, { apiKey });
             if (research) extracted = applyResearch(extracted, research);
