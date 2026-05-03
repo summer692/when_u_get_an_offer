@@ -547,7 +547,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
       {offer.summary && (
         <section className="mb-20">
           <div className="flex items-baseline justify-between mb-6">
-            <h2 className="section-label">发给学生</h2>
+            <h2 className="section-label">offer 主要信息</h2>
             <button
               onClick={async () => {
                 if (!offer.summary) return;
