@@ -53,7 +53,7 @@ export function TopBar({ onOpenSettings }: Props) {
                 <BrandIcon />
               )}
               <span className="hidden sm:inline tracking-wide">
-                {agencyName || "品牌"}
+                {agencyName || "OfferLens"}
               </span>
             </button>
             <button
