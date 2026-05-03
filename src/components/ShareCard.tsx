@@ -269,20 +269,35 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         </div>
       </div>
 
-      {/* Hero school name — keynote title */}
-      <h1
-        style={{
-          fontSize: 76,
-          lineHeight: 0.95,
-          letterSpacing: "-0.045em",
-          fontWeight: 600,
-          margin: 0,
-          color: INK,
-          wordBreak: "break-word",
-        }}
-      >
-        {schoolZh}
-      </h1>
+      {/* Hero school name — keynote title. Font size and line break point
+          chosen by pickHeroLayout so CJK compound words ("中文大学", "深圳",
+          etc.) never get split mid-character by browser auto-wrap. */}
+      {(() => {
+        const layout = pickHeroLayout(schoolZh);
+        return (
+          <h1
+            style={{
+              fontSize: layout.fontSize,
+              lineHeight: 1.05,
+              letterSpacing: "-0.045em",
+              fontWeight: 600,
+              margin: 0,
+              color: INK,
+              // keep-all stops CJK words from being broken anywhere; spaces
+              // in English names still wrap normally. break-word kicks in
+              // only when an English token alone exceeds the line.
+              wordBreak: "keep-all",
+              overflowWrap: "break-word",
+            }}
+          >
+            {layout.lines.map((line, i) => (
+              <span key={i} style={{ display: "block" }}>
+                {line}
+              </span>
+            ))}
+          </h1>
+        );
+      })()}
       {schoolZh !== offer.school && (
         <div
           style={{
@@ -776,4 +791,43 @@ function sortedTodos(todos: MustDo[]): MustDo[] {
 
 function pad(n: number) {
   return n.toString().padStart(2, "0");
+}
+
+/**
+ * Decide hero school-name typography: font size + manual line breaks at
+ * a semantically meaningful point so the browser doesn't split a CJK
+ * compound mid-word. Sample behavior:
+ *
+ *   "清华大学" (4)             → 80px / one line
+ *   "上海纽约大学" (6)          → 70px / one line  (no clean split)
+ *   "西交利物浦大学" (7)        → 70px / one line  (no clean split)
+ *   "香港中文大学（深圳）" (10) → 70px / "香港中文大学" + "（深圳）"
+ *   "纽约大学上海分校" (8)      → 70px / "纽约大学" + "上海分校"
+ *   really-long English        → 60px / one line, wraps at spaces
+ *
+ * Break priority:
+ *   1. Right before a Chinese full-width "（" — that's a localizer / region
+ *      qualifier and reads naturally as a sub-title on the next line.
+ *   2. Right after a "大学" that has more text following it (a mid-name
+ *      occurrence, not the trailing word).
+ *   3. Otherwise leave one line; CJK keep-all + word-wrap handles English.
+ */
+function pickHeroLayout(name: string): { fontSize: number; lines: string[] } {
+  // Use the spread operator to count code points correctly for CJK.
+  const charCount = [...name].length;
+  const lines: string[] = (() => {
+    const parenIdx = name.indexOf("（");
+    if (parenIdx > 0) {
+      return [name.slice(0, parenIdx), name.slice(parenIdx)];
+    }
+    const daxueIdx = name.indexOf("大学");
+    // Only break after 大学 when there's still meaningful text after it
+    // ("纽约大学上海分校" yes, "西交利物浦大学" no).
+    if (daxueIdx > 0 && daxueIdx + 2 < name.length) {
+      return [name.slice(0, daxueIdx + 2), name.slice(daxueIdx + 2)];
+    }
+    return [name];
+  })();
+  const fontSize = charCount <= 5 ? 80 : charCount <= 12 ? 70 : 60;
+  return { fontSize, lines };
 }
