@@ -532,7 +532,7 @@ export interface ExtractOptions {
  * a new prompt immediately without manually clearing storage. Bump whenever
  * SYSTEM_PROMPT changes in a way that would yield a meaningfully different
  * output (new field, stricter rules, etc.). */
-export const PROMPT_VERSION = "v7-program-degree";
+export const PROMPT_VERSION = "v8-verified-source";
 
 /** Build the L2 (extraction) cache key. Bumping PROMPT_VERSION naturally
  * invalidates every cached extraction in one stroke. */
@@ -886,6 +886,68 @@ export function pruneInfoGaps(offer: ExtractedOffer): string[] {
  * Google provider — OpenRouter doesn't expose grounded search through this
  * compatibility layer, so the caller must fall back gracefully.
  */
+/**
+ * Token set used to verify a source URL actually belongs to the school
+ * being researched. Mixes:
+ *   - Significant words from the school name (length ≥ 4)
+ *   - Acronym from initials of non-stop words (handles UCL / LSE / ICL)
+ *   - Reordered "X of Y" → "Y X" acronym (handles HKU = Hong Kong
+ *     University, despite the offer writing "The University of Hong
+ *     Kong" with the words in the other order)
+ */
+function extractSchoolTokens(name: string): string[] {
+  const STOP = new Set([
+    "the", "of", "in", "for", "at", "on", "and", "an", "a",
+  ]);
+  const all = name
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const nonStop = all.filter((w) => !STOP.has(w));
+
+  const tokens = new Set<string>();
+  for (const w of nonStop) {
+    if (w.length >= 4) tokens.add(w);
+  }
+  if (nonStop.length >= 2) {
+    tokens.add(nonStop.map((w) => w[0]).join(""));
+  }
+  // Reorder around "of": "X of Y" → "Y X" so HKU = "Hong Kong [Univ]"
+  // not "Univ Hong Kong".
+  const ofIdx = all.indexOf("of");
+  if (ofIdx > 0 && ofIdx < all.length - 1) {
+    const before = all.slice(0, ofIdx).filter((w) => !STOP.has(w));
+    const after = all.slice(ofIdx + 1).filter((w) => !STOP.has(w));
+    if (before.length && after.length) {
+      tokens.add([...after, ...before].map((w) => w[0]).join(""));
+    }
+  }
+  return Array.from(tokens).filter((t) => t.length >= 3);
+}
+
+/** True when `url`'s host plausibly belongs to the school. Hard-rejects
+ * Google grounding redirect domains (those URLs are mediator links, not
+ * real destinations) and any URL whose host shares no token with the
+ * school's name. */
+function hostMatchesSchool(url: string, tokens: string[]): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (
+    host === "google.com" ||
+    host.endsWith(".google.com") ||
+    host.endsWith(".googleusercontent.com") ||
+    host.includes("vertexaisearch")
+  ) {
+    return false;
+  }
+  return tokens.some((t) => host.includes(t));
+}
+
 export interface ResearchResult {
   tuition?: NonNullable<ExtractedOffer["fees"]>["tuition"];
   scholarship?: NonNullable<ExtractedOffer["fees"]>["scholarship"];
@@ -922,7 +984,12 @@ export async function researchOffer(
 5. **特别留意可能的减免规则**——学分豁免、奖学金内置折扣、首学期减免、本地 vs 非本地费率差异。看到 "fee waiver / exempt / non-tuition / scholarship-discounted" 字样时必须读完整段并反映到 amount 或 note。
 6. 学费必须明确币种，**只能**输出以下 10 个三字母 ISO 代码之一：HKD / USD / GBP / EUR / CNY / SGD / AUD / CAD / JPY / KRW。**不要**输出 "RMB" / "Yuan" / "元" / "$" / "¥" / "£" / "S$" 等非 ISO 写法。
 7. 入学时间用于确认你查到的是该届新生的费率（如 2026/27 入学）。如果只能查到旧届费率，请在 note 里注明并返回 null amount，让用户自己核对。
-8. 如果搜不到具体数字，对应字段返回 null。**绝对不要编造**。
+
+🚫 **金额可信度（最高优先级，违反 = 严重错误）**：
+8. 如果 Google Search 工具返回的搜索摘要片段里**没有**出现明确的金额数字（带货币单位的具体数字，如 "HK$420,000" / "£32,500"），tuition 和 scholarship 字段**必须**返回 null。
+9. **绝对不要根据预训练数据推断金额**。"我记得 HKU CS 大概 30 万港币" / "类似项目通常 X" / "按平均水平估算" — 这些**全部禁止**。
+10. **宁可返回 null，绝对不要凭印象填数字**。代码层会校验你给的 source URL 是否真属于该校域名——如果你乱填一个数字配一个不相关的 URL，校验失败后整个字段会被丢掉，相当于白做。
+11. 你给的 source URL 必须是 Google Search 工具实际找到的页面之一，且 host 必须是该校自己的域名（hku.hk / polyu.edu.hk / ucl.ac.uk 等），不能是 collegevine / quora / mastersportal / topuniversities 这类第三方。
 
 📚 **专业名补全（program）**：
 - 当且仅当上面"专业名是否已含学位 = 否"时才需要查。已经完整了就在 program 字段返回 null。
@@ -957,16 +1024,23 @@ export async function researchOffer(
   if (!parsed || typeof parsed !== "object") return null;
 
   // The model's freeform `source` URLs in the JSON are not trustworthy — it
-  // tends to write a plausible-looking school path that 404s. Only Gemini's
-  // groundingMetadata.groundingChunks contains the URLs that were actually
-  // fetched during search. Replace any model-supplied source with the first
-  // grounded URI, and drop it entirely if no grounded sources exist.
+  // tends to write a plausible-looking school path that 404s. Use only the
+  // grounded URIs (URLs Google Search actually returned), AND filter them
+  // by host to make sure we don't surface a Gemini grounding-redirect link
+  // or a third-party page like collegevine / quora as if it were the
+  // school's own page.
   const groundingChunks: { web?: { uri?: string; title?: string } }[] =
     json?.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
   const groundedSources = groundingChunks
     .map((c) => c.web?.uri)
     .filter((u): u is string => !!u);
-  const verifiedSource = groundedSources[0];
+  const schoolTokens = extractSchoolTokens(offer.school);
+  // Pick the FIRST grounded URL whose host plausibly belongs to the
+  // school. If none does, source is undefined — UI surfaces that as
+  // "未找到可靠来源" rather than a broken link.
+  const verifiedSource = groundedSources.find((url) =>
+    hostMatchesSchool(url, schoolTokens),
+  );
 
   // Validate the program payload — both languages, both must have content.
   let programOut: { en?: string; zh?: string } | undefined;
@@ -1199,7 +1273,13 @@ export function applyResearch<T extends ExtractedOffer>(
       merged.fees!.tuition = {
         ...research.tuition,
         is_partial: false,
-        is_estimate: false,
+        // Honest is_estimate: when researchOffer's host-verification
+        // dropped the source URL (third-party / Google redirect / no
+        // school-domain match), we have a number but no way to verify
+        // where it came from. Keep the number, mark it as estimate so
+        // UI shows the "参考值" treatment instead of the same weight
+        // as a real offer-stated figure.
+        is_estimate: !research.tuition.source,
       };
       researched.add("tuition");
     } else if (userVerified || existingIsAuthoritative) {
@@ -1209,7 +1289,10 @@ export function applyResearch<T extends ExtractedOffer>(
     }
   }
   if (research.scholarship && !merged.fees!.scholarship) {
-    merged.fees!.scholarship = research.scholarship;
+    merged.fees!.scholarship = {
+      ...research.scholarship,
+      is_estimate: !research.scholarship.source,
+    };
     researched.add("scholarship");
   }
   if (research.duration && !merged.duration) {

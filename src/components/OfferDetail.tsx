@@ -715,7 +715,6 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               title="学费"
               money={offer.fees?.tuition}
               school={schoolZh}
-              program={offer.program}
               onEdit={() => setEditingFee("tuition")}
               researched={offer.researched_fields?.includes("tuition")}
               shareVisible={isVisibleInShare(offer, "fees.tuition")}
@@ -725,7 +724,6 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               title="留位费"
               money={offer.fees?.deposit}
               school={schoolZh}
-              program={offer.program}
               onEdit={() => setEditingFee("deposit")}
               researched={offer.researched_fields?.includes("deposit")}
               shareVisible={isVisibleInShare(offer, "fees.deposit")}
@@ -735,7 +733,6 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               title="奖学金"
               money={offer.fees?.scholarship}
               school={schoolZh}
-              program={offer.program}
               onEdit={() => setEditingFee("scholarship")}
               researched={offer.researched_fields?.includes("scholarship")}
               shareVisible={isVisibleInShare(offer, "fees.scholarship")}
@@ -1172,7 +1169,6 @@ function FeeBlock({
   title,
   money,
   school,
-  program,
   onEdit,
   researched,
   shareVisible,
@@ -1181,7 +1177,6 @@ function FeeBlock({
   title: string;
   money?: Money | null;
   school: string;
-  program: string;
   onEdit: () => void;
   /** True when this field's value was filled in by researchOffer (Gemini
    * + grounded web search) rather than read directly off the offer. */
@@ -1274,6 +1269,9 @@ function FeeBlock({
 
       {money && money.amount > 0 && (
         money.source ? (
+          // Link only renders when researchOffer's host check passed —
+          // i.e. the URL really does belong to the school. Otherwise we
+          // fall through to the neutral "no reliable source" hint.
           <a
             href={money.source}
             target="_blank"
@@ -1288,15 +1286,9 @@ function FeeBlock({
             请在 offer 中再次核对
           </div>
         ) : (
-          <a
-            href={buildVerifyUrl(school, program, title)}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className={`mt-4 inline-flex items-center gap-1 text-xs underline underline-offset-4 ${sourceLinkClass}`}
-          >
-            去官网核对 ↗
-          </a>
+          <div className="mt-4 text-xs text-ink-500">
+            未找到可靠来源，请手动查询学校官网
+          </div>
         )
       )}
     </div>
@@ -1364,10 +1356,6 @@ function hostOf(url: string): string {
   }
 }
 
-function buildVerifyUrl(school: string, program: string, title: string): string {
-  const q = `${school} ${program} ${title === "学费" ? "tuition fee" : title} site:edu OR site:edu.hk OR site:ac.uk`;
-  return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
-}
 
 function timestampStamp(): string {
   const d = new Date();
