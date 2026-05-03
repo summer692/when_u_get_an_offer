@@ -72,7 +72,9 @@ export default function App() {
           }
         }
 
-        setStage("快好了，保存中......");
+        // No stage update for the DB-write step — keep showing whichever
+        // label was up during extraction / research. The save itself is
+        // ~10ms and not worth its own status text.
         const now = Date.now();
         const offer: Offer = {
           ...extracted,
