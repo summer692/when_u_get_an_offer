@@ -40,7 +40,6 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
   // produces independent PNGs, not one tall image.
   const cardRefs = useRef<Array<HTMLDivElement | null>>([]);
   const measureRef = useRef<HTMLDivElement>(null);
-  const feesRef = useRef<HTMLDivElement>(null);
   // Page assignments are computed by measuring section heights against the
   // available content area of a 1080×1920 frame. Default to "everything on
   // page 1" so the export still works on first paint before measurement.
@@ -57,10 +56,6 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
     undefined,
   );
   const [downloadingPreview, setDownloadingPreview] = useState(false);
-
-  function scrollToFees() {
-    feesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
 
   const [agency, setAgency] = useState<
     Pick<Settings, "agencyName" | "agencyLogo">
@@ -708,7 +703,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         </div>
       </Section>
 
-      <div ref={feesRef} style={{ scrollMarginTop: 80 }}>
+      <div>
         <Section label="费用">
           <div className="grid md:grid-cols-3 gap-6">
             <FeeBlock
@@ -742,36 +737,47 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         </Section>
       </div>
 
-      {offer.info_gaps && offer.info_gaps.length > 0 && (
-        <section className="mb-16 rounded-card border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/40 p-6">
-          <div className="text-xs uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300 font-medium mb-3">
-            需要核实
-          </div>
-          <ul className="space-y-2 text-amber-900 dark:text-amber-100">
-            {offer.info_gaps.map((g, i) => (
-              <li key={i} className="flex items-start gap-3">
-                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                <span>{g}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              onClick={rerunResearch}
-              disabled={researching}
-              className="text-xs px-3 py-1.5 rounded-full bg-amber-200/70 dark:bg-amber-800/40 text-amber-900 dark:text-amber-100 hover:bg-amber-300/70 dark:hover:bg-amber-800/60 transition-colors disabled:opacity-60"
-            >
-              {researching ? "查询中…" : `重新查 ${schoolZh} 官网`}
-            </button>
-            <button
-              onClick={scrollToFees}
-              className="text-xs text-amber-800 dark:text-amber-200 underline underline-offset-4 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
-            >
-              或 点击卡片手动修正
-            </button>
-          </div>
-        </section>
-      )}
+      {offer.info_gaps && offer.info_gaps.length > 0 && (() => {
+        // Prefer the tuition page URL since 需要核实 is most often about
+        // money. Fall back to scholarship's URL if only that surfaced.
+        // Both are post-verification — researchOffer's hostMatchesSchool
+        // gate already rejected anything that wasn't on the school's
+        // own domain (or was a Gemini grounding redirect).
+        const verifiedUrl =
+          offer.fees?.tuition?.source ?? offer.fees?.scholarship?.source;
+        return (
+          <section className="mb-16 rounded-card border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/40 p-6">
+            <div className="text-xs uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300 font-medium mb-3">
+              需要核实
+            </div>
+            <ul className="space-y-2 text-amber-900 dark:text-amber-100">
+              {offer.info_gaps.map((g, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="mt-2 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span>{g}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 text-xs text-amber-800 dark:text-amber-300">
+              {verifiedUrl ? (
+                <>
+                  这些字段需要手动核对。
+                  <a
+                    href={verifiedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-1 underline underline-offset-4 hover:text-amber-900 dark:hover:text-amber-100"
+                  >
+                    → 打开学校官网
+                  </a>
+                </>
+              ) : (
+                "请手动核对以上信息"
+              )}
+            </div>
+          </section>
+        );
+      })()}
 
       {(offer.fees?.tuition?.is_estimate || offer.fees?.tuition?.is_partial) &&
         !offer.info_gaps?.length && (
