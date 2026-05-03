@@ -1250,9 +1250,9 @@ function FeeBlock({
 
       {money && money.amount > 0 && (
         money.source ? (
-          // Link only renders when researchOffer's host check passed —
-          // i.e. the URL really does belong to the school. Otherwise we
-          // fall through to the neutral "no reliable source" hint.
+          // Verified school-domain URL (post-hostMatchesSchool). Render
+          // for any level that has one — L2 highlighted in red, L1's
+          // surfaces it as a quiet "via host.com" reference.
           <a
             href={money.source}
             target="_blank"
@@ -1266,11 +1266,16 @@ function FeeBlock({
           <div className="mt-4 text-xs text-ink-500">
             请在 offer 中再次核对
           </div>
-        ) : (
+        ) : level === 2 ? (
+          // Only nag the user about a missing source when the value
+          // actually NEEDED one — i.e. it came from research / estimate.
+          // Offer-stated values (L1) are their own source; showing
+          // "未找到可靠来源" there reads as the product distrusting its
+          // own extraction.
           <div className="mt-4 text-xs text-ink-500">
             未找到可靠来源，请手动查询学校官网
           </div>
-        )
+        ) : null
       )}
     </div>
   );
