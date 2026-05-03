@@ -247,6 +247,41 @@ notes（offer 上易被忽略但重要的附加说明，每条一句中文）：
 
 只要 offer 上写明的信息，**必须**反映到对应字段——任何省略都视为严重错误。
 
+🎓 **专业名 (program / program_zh) — 必须自含学位类型**
+
+program 是会出现在分享卡核心位置的字段，**绝对不能**只写专业方向裸名。规则：
+
+1. program **必须**是 "学位类型 + 专业方向" 的完整英文写法。**不接受**：
+   - ❌ \`Public Policy\`（缺学位）
+   - ❌ \`Computer Science\`（缺学位）
+   - ❌ \`MPP\`（用了缩写没展开）
+   - ✅ \`Master of Public Policy\`
+   - ✅ \`MSc in Computer Science\`
+   - ✅ \`PhD in Education\`
+
+2. **缩写一律展开为全称**：
+   - \`MPP\` → \`Master of Public Policy\`
+   - \`MSc\` 出现时若 offer 别处写出全称（如 \`Master of Science in X\`），优先使用全称
+   - \`MBA\` 可保留为缩写（\`Master of Business Administration\` 太长，业界通用 MBA）
+   - 同理 LLM, PhD, MPhil, EdD, JD, DPhil, EngD, MArch 这些**业界通用缩写**可保留
+
+3. **找全名的范围**：扫整份 offer——标题（subject line）、抬头（recipient block）、正文（"You have been admitted to..."）、签名段、附件页眉、Programme Code 旁的 Programme Title。**只要任何一处写了完整名称，就用那个**。
+
+4. program_zh **必须**包含学位中文：硕士 / 博士 / 学士 / 工程硕士 / 工商管理硕士 等。**不接受**只写"公共政策"、"计算机科学"——必须是"公共政策硕士"、"计算机科学理学硕士"。
+
+5. 如果整份 offer 上**确实只能找到**裸专业名（极罕见，比如某些非正式 acceptance letter），保留裸名 + 在 info_gaps 加一句"专业名缺学位类型，建议查 [学校] 官网项目页确认"——后续 research 步骤会去补全。
+
+**反例校正**（offer 上各处都没明说时不要硬猜，但只要任何一处提到学位类型就必须用上）：
+
+✅ offer 标题写 \`Offer of Admission to MPP Programme\`，正文有 \`Master of Public Policy\`：
+   → program = "Master of Public Policy"
+   → program_zh = "公共政策硕士"
+   → degree = "Master"
+   → degree_zh = "硕士"
+
+✅ offer 只在 Programme Title 处写 \`Computer Science\`，但 Programme Code 是 \`TPG-MSc-CS\`：
+   → 从代码推 program = "MSc in Computer Science"，program_zh = "计算机科学理学硕士"
+
 抽取规则（续）：
 - 中文名规则：
   - school_zh 是学校的常用中文名，例如 "The Hong Kong Polytechnic University" → "香港理工大学"；"University College London" → "伦敦大学学院"；"University of California, Berkeley" → "加州大学伯克利分校"；"The University of Hong Kong" → "香港大学"；"Imperial College London" → "帝国理工学院"。学校没有公认中文名就 null，不要硬翻。
@@ -502,7 +537,7 @@ export interface ExtractOptions {
  * a new prompt immediately without manually clearing storage. Bump whenever
  * SYSTEM_PROMPT changes in a way that would yield a meaningfully different
  * output (new field, stricter rules, etc.). */
-const PROMPT_VERSION = "v6-no-markdown";
+const PROMPT_VERSION = "v7-program-degree";
 
 /** SHA-256 hash of the parsed input bytes plus the prompt version. Stable
  * across runs for the same file + prompt, so the same offer always maps to
@@ -826,6 +861,24 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
 }
 
 /**
+ * Heuristic: does the program / program_zh fields contain a recognizable
+ * degree marker? If both languages are missing one, we treat the program
+ * as incomplete and let researchOffer go look up the official name.
+ * Used by App.tsx to decide whether to trigger the research step.
+ */
+const EN_DEGREE_RE =
+  /\b(Master|Bachelor|Doctor(?:ate|ial)?|PhD|MPhil|MSc|MA|MBA|BSc|BA|BBA|MEng|BEng|MFA|LLM|LLB|MPP|MEd|EdD|JD|DPhil|EngD|MArch|MPH|MAcc|MFin|MIM|MIS|MComm|MRes)\b/i;
+const ZH_DEGREE_RE = /(硕士|博士|学士|工学|理学|文学|商学|教育学|哲学|医学|法学|管理学|工程师|本科|研究生)/;
+
+export function programIsComplete(offer: ExtractedOffer): boolean {
+  const en = offer.program ?? "";
+  const zh = offer.program_zh ?? "";
+  // Both surfaces (English original + Chinese translation) need a degree
+  // marker so the share card never shows a degree-less subtitle.
+  return EN_DEGREE_RE.test(en) && ZH_DEGREE_RE.test(zh);
+}
+
+/**
  * Drop info_gaps entries that contradict fields the LLM actually filled in.
  * Defense against the model emitting both "未找到 X" and a populated X field.
  */
@@ -871,6 +924,10 @@ export interface ResearchResult {
   tuition?: NonNullable<ExtractedOffer["fees"]>["tuition"];
   scholarship?: NonNullable<ExtractedOffer["fees"]>["scholarship"];
   duration?: string;
+  /** Full programme name with degree type, looked up from the school's
+   * official programme listing page. Filled in only when the extraction's
+   * program is bare (no degree marker like "Master", "MSc", "PhD", etc.). */
+  program?: { en?: string; zh?: string };
   sources: string[];
 }
 
@@ -881,12 +938,15 @@ export async function researchOffer(
   opts: { apiKey: string; signal?: AbortSignal },
 ): Promise<ResearchResult | null> {
   const termStart = offer.key_dates?.find((k) => k.type === "term_start")?.date;
+  const programNeedsLookup = !programIsComplete(offer);
   const prompt = `用户拿到了一份 ${offer.school} 的录取通知，但 offer 上有些关键信息不全，需要你访问学校官方网站补全。
 
 学校：${offer.school}
-项目：${offer.program}${offer.degree ? ` (${offer.degree})` : ""}
+项目（offer 原文）：${offer.program}${offer.degree ? ` (${offer.degree})` : ""}
+项目中文名（已知）：${offer.program_zh ?? "未知"}
 学制：${offer.duration ?? "未知"}
 入学时间：${termStart ?? "未知"}
+专业名是否已含学位：${programNeedsLookup ? "否（请补全）" : "是"}
 
 请补全以下字段。规则：
 1. **只能用学校官方网站**（如 .edu.hk、.edu、.ac.uk、.edu.au、.edu.cn 等学校自己的域名），不要用第三方留学网站、论坛、知乎、小红书等。
@@ -898,17 +958,24 @@ export async function researchOffer(
 7. 入学时间用于确认你查到的是该届新生的费率（如 2026/27 入学）。如果只能查到旧届费率，请在 note 里注明并返回 null amount，让用户自己核对。
 8. 如果搜不到具体数字，对应字段返回 null。**绝对不要编造**。
 
+📚 **专业名补全（program）**：
+- 当且仅当上面"专业名是否已含学位 = 否"时才需要查。已经完整了就在 program 字段返回 null。
+- 去学校官网的 Programme List / Postgraduate Studies / Admissions 页面找这个专业的**官方完整名称**——必须含学位类型（Master of / MSc in / MA in / PhD in / 等）。
+- 同时给出官方公布的中文名（学校的中英双语项目页通常都有）。学校没有公布中文名就用业界通用译法（如 "Master of Public Policy" → "公共政策硕士"）。
+- ❌ 不要硬猜。如果官网项目页搜不到、或者搜到的名字也不含学位类型，program 返回 null。
+
 请输出一段 JSON（包在 \`\`\`json 代码块里）：
 
 {
   "tuition": { "amount": <number>, "currency": "<3-letter ISO>", "period": "total"|"year", "note": "<中文，说明依据，例如 '30 学分 × HK$8,500，依据 polyu.edu.hk 公布的 2026/27 入学费率'>", "source": "<具体页面 URL>" } | null,
   "duration": "<例如 '1.5 年' 或 '30 学分'>" | null,
-  "scholarship": { "amount": <number>, "currency": "<ISO>", "note": "<中文条件说明>", "source": "<URL>" } | null
+  "scholarship": { "amount": <number>, "currency": "<ISO>", "note": "<中文条件说明>", "source": "<URL>" } | null,
+  "program": { "en": "<例如 'Master of Public Policy'>", "zh": "<例如 '公共政策硕士'>" } | null
 }
 
 注意：
-- 如果你找不到任何官网信息，三个字段都返回 null。
-- 已经清楚的字段（学制等）就不必再查，直接返回 null 即可。`;
+- 如果你找不到任何官网信息，所有字段都返回 null。
+- 已经清楚的字段就不必再查，直接返回 null 即可。`;
 
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models/${RESEARCH_SUPPORTED_MODEL}:generateContent` +
@@ -935,6 +1002,24 @@ export async function researchOffer(
     .filter((u): u is string => !!u);
   const verifiedSource = groundedSources[0];
 
+  // Validate the program payload — both languages, both must have content.
+  let programOut: { en?: string; zh?: string } | undefined;
+  if (parsed.program && typeof parsed.program === "object") {
+    const en =
+      typeof parsed.program.en === "string" && parsed.program.en.trim()
+        ? parsed.program.en.trim()
+        : undefined;
+    const zh =
+      typeof parsed.program.zh === "string" && parsed.program.zh.trim()
+        ? parsed.program.zh.trim()
+        : undefined;
+    // Only accept the lookup if the proposed English name actually contains
+    // a degree marker — that's the whole point of going to the website.
+    if (en && EN_DEGREE_RE.test(en)) {
+      programOut = { en, zh };
+    }
+  }
+
   return {
     tuition: withVerifiedSource(cleanMoney(parsed.tuition), verifiedSource),
     scholarship: withVerifiedSource(
@@ -945,6 +1030,7 @@ export async function researchOffer(
       typeof parsed.duration === "string" && parsed.duration.trim()
         ? parsed.duration.trim()
         : undefined,
+    program: programOut,
     sources: groundedSources,
   };
 }
@@ -1163,6 +1249,14 @@ export function applyResearch<T extends ExtractedOffer>(
   if (research.duration && !merged.duration) {
     merged.duration = research.duration;
     researched.add("duration");
+  }
+  // Only overwrite the program when the existing one is degree-less. This
+  // keeps a perfectly-good extraction from being clobbered by a noisy
+  // research lookup, while still rescuing the bare "Public Policy" cases.
+  if (research.program?.en && !programIsComplete(merged)) {
+    merged.program = research.program.en;
+    if (research.program.zh) merged.program_zh = research.program.zh;
+    researched.add("program");
   }
   merged.researched_fields = [...researched];
   merged.info_gaps = pruneInfoGaps(merged);

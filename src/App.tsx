@@ -8,7 +8,12 @@ import { ProcessingOverlay } from "./components/ProcessingOverlay";
 import { useOffers } from "./hooks/useOffers";
 import { useTheme } from "./hooks/useTheme";
 import { parseFile, parseText, type ParsedInput } from "./lib/parsers";
-import { applyResearch, extractOffer, researchOffer } from "./lib/llm";
+import {
+  applyResearch,
+  extractOffer,
+  programIsComplete,
+  researchOffer,
+} from "./lib/llm";
 import { getSettings } from "./lib/db";
 import { uuid } from "./lib/format";
 import type { ExtractedOffer, Offer } from "./lib/schema";
@@ -54,7 +59,8 @@ export default function App() {
           (extracted.info_gaps?.length ?? 0) > 0 ||
           extracted.fees?.tuition?.is_partial === true ||
           extracted.fees?.tuition?.is_estimate === true ||
-          !extracted.fees?.tuition;
+          !extracted.fees?.tuition ||
+          !programIsComplete(extracted);
 
         if (needsResearch && provider === "google") {
           setStage("OfferLens 正在查官网补全......");

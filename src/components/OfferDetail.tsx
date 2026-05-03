@@ -575,7 +575,16 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         <div className="border-y border-ink-100 dark:border-ink-700 divide-y divide-ink-100 dark:divide-ink-700">
           <Fact
             label="录取专业"
-            value={programZh ? programZh : offer.program}
+            value={
+              <span className="inline-flex items-baseline gap-2 flex-wrap">
+                <span>{programZh ? programZh : offer.program}</span>
+                {offer.researched_fields?.includes("program") && (
+                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                    参考值 · 来自官网
+                  </span>
+                )}
+              </span>
+            }
             secondary={programZh && offer.program ? offer.program : undefined}
           />
           {facultyZh && (
