@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Condition, Money, MustDo, Offer, Settings } from "../lib/schema";
 import { daysUntil, formatDaysLeft } from "../lib/countdown";
 import { formatDate, formatMoney } from "../lib/format";
@@ -1083,11 +1084,18 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         />
       </div>
 
-      {toast && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-ink-900 dark:bg-white text-white dark:text-ink-900 px-5 py-3 text-sm fade-up z-50 tracking-wide">
-          {toast}
-        </div>
-      )}
+      {toast &&
+        // Portal to <body>: OfferDetail's wrapper has `.fade-up`, whose
+        // residual transform makes it the containing block for fixed
+        // descendants. Without the portal the toast pins to the bottom
+        // of the OfferDetail content (often offscreen on a deep-scrolled
+        // page), not the viewport.
+        createPortal(
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-ink-900 dark:bg-white text-white dark:text-ink-900 px-5 py-3 text-sm fade-up z-50 tracking-wide rounded-full shadow-lg">
+            {toast}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
