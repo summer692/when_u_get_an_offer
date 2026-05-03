@@ -4,12 +4,19 @@ interface Props {
   stage: string | null;
   error: string | null;
   onDismissError: () => void;
+  /** Cache-hit fast path: ramp 0%→100% in ~1.5s instead of the default
+   * 60s 0→95 plateau. Set by App.tsx when L2 extraction cache hits. */
+  quickMode?: boolean;
 }
 
 // Fake-timer constants chosen for "calm and predictable" feel:
 // 60s linear ramp to 95%, then plateau until real data lands.
 const FAKE_DURATION_MS = 60_000;
 const FAKE_CEILING = 95;
+// Cache-hit timing: the parent holds the loading state for ~1.5s on
+// purpose, so the bar should fill cleanly within that window.
+const QUICK_DURATION_MS = 1500;
+const QUICK_CEILING = 100;
 const TICK_MS = 200;
 // Hold the overlay for one tick after the bar hits 100% so the user
 // sees the bar fill, not just the overlay vanishing.
@@ -28,7 +35,12 @@ const FINISH_FLASH_MS = 250;
  * are intentionally invisible to the bar: the timer keeps running
  * across them so progress never visibly resets mid-flight.
  */
-export function ProcessingOverlay({ stage, error, onDismissError }: Props) {
+export function ProcessingOverlay({
+  stage,
+  error,
+  onDismissError,
+  quickMode = false,
+}: Props) {
   const [progress, setProgress] = useState(0);
   const [showing, setShowing] = useState(false);
   const [lastStage, setLastStage] = useState("");
@@ -50,12 +62,13 @@ export function ProcessingOverlay({ stage, error, onDismissError }: Props) {
         startedAtRef.current = Date.now();
         setShowing(true);
         setProgress(0);
+        // Snapshot the mode at start time — sub-stage updates won't
+        // accidentally flip a cache-hit bar into the slow ramp midway.
+        const dur = quickMode ? QUICK_DURATION_MS : FAKE_DURATION_MS;
+        const ceil = quickMode ? QUICK_CEILING : FAKE_CEILING;
         intervalIdRef.current = window.setInterval(() => {
           const elapsed = Date.now() - startedAtRef.current;
-          const pct = Math.min(
-            FAKE_CEILING,
-            (elapsed / FAKE_DURATION_MS) * FAKE_CEILING,
-          );
+          const pct = Math.min(ceil, (elapsed / dur) * ceil);
           setProgress(pct);
         }, TICK_MS);
       }

@@ -11,12 +11,23 @@ import { parseFile, parseText, type ParsedInput } from "./lib/parsers";
 import {
   applyResearch,
   extractOffer,
+  extractionCacheKey,
   programIsComplete,
   researchOffer,
 } from "./lib/llm";
-import { getSettings } from "./lib/db";
-import { uuid } from "./lib/format";
+import {
+  getCachedExtraction,
+  getCachedOcr,
+  getCachedResearch,
+  getSettings,
+  saveCachedExtraction,
+  saveCachedOcr,
+  saveCachedResearch,
+} from "./lib/db";
+import { hashFileBytes, hashString, researchCacheKey, uuid } from "./lib/format";
 import type { ExtractedOffer, Offer } from "./lib/schema";
+
+const FAST_PATH_DELAY_MS = 1500;
 
 export default function App() {
   useTheme();
@@ -24,6 +35,7 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
+  const [quickMode, setQuickMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const active = offers.find((o) => o.id === activeId) ?? null;
@@ -37,84 +49,178 @@ export default function App() {
     return { apiKey: s.apiKey, provider: s.provider, model: s.model };
   }, []);
 
-  const runExtraction = useCallback(
-    async (input: ParsedInput) => {
-      try {
-        setError(null);
-        const { apiKey, provider, model } = await ensureKey();
-        setStage("OfferLens 阅读中，请站在此地不要动......");
-        let extracted: ExtractedOffer = await extractOffer(input, {
-          apiKey,
-          provider,
-          model,
-          // Surface only cache hits to the user (it's a near-instant result,
-          // worth telling them); silently swallow fallback / retry chatter
-          // so the spinner copy stays calm and consistent.
-          onProgress: (msg) => {
-            if (msg.startsWith("命中")) setStage(msg);
-          },
-        });
+  /** Common tail: build the Offer record from a finished ExtractedOffer
+   * and save it. Shared between the cache-hit fast path and the normal
+   * extraction path so the offer-construction logic stays in one place. */
+  const persistAndOpen = useCallback(
+    async (extracted: ExtractedOffer, input: ParsedInput) => {
+      const now = Date.now();
+      const offer: Offer = {
+        ...extracted,
+        id: uuid(),
+        created_at: now,
+        updated_at: now,
+        source_kind: input.kind,
+        source_name: input.sourceName,
+      };
+      await add(offer);
+      setActiveId(offer.id);
+    },
+    [add],
+  );
 
-        const needsResearch =
-          (extracted.info_gaps?.length ?? 0) > 0 ||
-          extracted.fees?.tuition?.is_partial === true ||
-          extracted.fees?.tuition?.is_estimate === true ||
-          !extracted.fees?.tuition ||
-          !programIsComplete(extracted);
+  /** Cache-hit fast path: run a 1.5s timer so the user perceives
+   * "OfferLens 正在为你快速调取..." instead of an instantaneous flash,
+   * then commit the cached extraction as a fresh Offer. */
+  const runFromCache = useCallback(
+    async (extracted: ExtractedOffer, input: ParsedInput) => {
+      setQuickMode(true);
+      setStage("OfferLens 正在为你快速调取……");
+      await new Promise((r) => setTimeout(r, FAST_PATH_DELAY_MS));
+      await persistAndOpen(extracted, input);
+    },
+    [persistAndOpen],
+  );
 
-        if (needsResearch && provider === "google") {
+  /** Normal path: extract via LLM, optionally run research, save. Caller
+   * is responsible for L1 (OCR) and L2 (extraction) cache lookups before
+   * deciding to come here; we still do L3 (research) in here because it
+   * runs after extraction and is keyed off the extracted school+program. */
+  const runFullExtraction = useCallback(
+    async (input: ParsedInput, fileHash: string) => {
+      const { apiKey, provider, model } = await ensureKey();
+      setQuickMode(false);
+      setStage("OfferLens 阅读中，请站在此地不要动......");
+      let extracted: ExtractedOffer = await extractOffer(input, {
+        apiKey,
+        provider,
+        model,
+        onProgress: () => {
+          // Internal fallback / retry messages are intentionally swallowed
+          // so the loading copy stays calm and consistent.
+        },
+      });
+
+      // Write through to L2 immediately so a subsequent re-upload skips
+      // the LLM entirely. Failure is non-fatal.
+      saveCachedExtraction(extractionCacheKey(fileHash), extracted).catch(
+        (err) => console.warn("L2 cache write failed", err),
+      );
+
+      const needsResearch =
+        (extracted.info_gaps?.length ?? 0) > 0 ||
+        extracted.fees?.tuition?.is_partial === true ||
+        extracted.fees?.tuition?.is_estimate === true ||
+        !extracted.fees?.tuition ||
+        !programIsComplete(extracted);
+
+      if (needsResearch && provider === "google") {
+        const rkey = researchCacheKey(extracted.school, extracted.program);
+        const cachedResearch = await getCachedResearch(rkey);
+        if (cachedResearch) {
+          // L3 hit — apply silently, no separate stage label needed.
+          extracted = applyResearch(extracted, cachedResearch);
+        } else {
           setStage("OfferLens 正在查询官网补全信息......");
           try {
             const research = await researchOffer(extracted, { apiKey });
-            if (research) extracted = applyResearch(extracted, research);
+            if (research) {
+              extracted = applyResearch(extracted, research);
+              saveCachedResearch(rkey, research).catch((err) =>
+                console.warn("L3 cache write failed", err),
+              );
+              // Refresh L2 with the post-research extraction so the next
+              // re-upload of the same file pays neither the extraction
+              // nor the research cost.
+              saveCachedExtraction(
+                extractionCacheKey(fileHash),
+                extracted,
+              ).catch((err) => console.warn("L2 refresh failed", err));
+            }
           } catch (err) {
             console.warn("research step failed, keeping initial extraction", err);
           }
         }
-
-        // No stage update for the DB-write step — keep showing whichever
-        // label was up during extraction / research. The save itself is
-        // ~10ms and not worth its own status text.
-        const now = Date.now();
-        const offer: Offer = {
-          ...extracted,
-          id: uuid(),
-          created_at: now,
-          updated_at: now,
-          source_kind: input.kind,
-          source_name: input.sourceName,
-        };
-        await add(offer);
-        setActiveId(offer.id);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setStage(null);
       }
+
+      await persistAndOpen(extracted, input);
     },
-    [add, ensureKey]
+    [ensureKey, persistAndOpen],
   );
 
   const handleFile = useCallback(
     async (file: File) => {
       try {
         setError(null);
-        setStage("解析文件…");
-        const parsed = await parseFile(file);
-        await runExtraction(parsed);
+        setQuickMode(false);
+        setStage("OfferLens 阅读中，请站在此地不要动......");
+
+        // Hash the raw file bytes — stable across renders, exact, and
+        // available before any expensive work (parseFile / LLM).
+        const fileHash = await hashFileBytes(file);
+
+        // L2 first: a cached extraction means we never need to OCR or
+        // call the LLM at all.
+        const cachedExtraction = await getCachedExtraction(
+          extractionCacheKey(fileHash),
+        );
+        if (cachedExtraction) {
+          // Synthesize a minimal ParsedInput so persistAndOpen can stamp
+          // the source_kind / source_name fields. We don't need the
+          // actual text — the extraction is already done.
+          const placeholder: ParsedInput = {
+            kind: "pdf",
+            text: "",
+            images: [],
+            sourceName: file.name,
+          };
+          await runFromCache(cachedExtraction, placeholder);
+          return;
+        }
+
+        // L1: skip parseFile if we've already OCR'd this file before.
+        let parsed = await getCachedOcr(fileHash);
+        if (!parsed) {
+          parsed = await parseFile(file);
+          saveCachedOcr(fileHash, parsed).catch((err) =>
+            console.warn("L1 cache write failed", err),
+          );
+        }
+
+        await runFullExtraction(parsed, fileHash);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
+      } finally {
         setStage(null);
       }
     },
-    [runExtraction]
+    [runFromCache, runFullExtraction],
   );
 
   const handleText = useCallback(
     async (text: string) => {
-      await runExtraction(parseText(text));
+      try {
+        setError(null);
+        setQuickMode(false);
+        setStage("OfferLens 阅读中,请站在此地不要动......");
+
+        // Pasted text has no File object — hash the string itself.
+        const textHash = await hashString(text);
+        const cachedExtraction = await getCachedExtraction(
+          extractionCacheKey(textHash),
+        );
+        if (cachedExtraction) {
+          await runFromCache(cachedExtraction, parseText(text));
+          return;
+        }
+        await runFullExtraction(parseText(text), textHash);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setStage(null);
+      }
     },
-    [runExtraction]
+    [runFromCache, runFullExtraction],
   );
 
   useEffect(() => {
@@ -152,6 +258,7 @@ export default function App() {
       <ProcessingOverlay
         stage={stage}
         error={error}
+        quickMode={quickMode}
         onDismissError={() => setError(null)}
       />
     </div>

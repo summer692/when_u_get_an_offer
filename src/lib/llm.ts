@@ -2,7 +2,6 @@ import { jsonrepair } from "jsonrepair";
 import type { ExtractedOffer, Condition, MustDo, Provider } from "./schema";
 import { stripMarkdown } from "./format";
 import type { ParsedInput } from "./parsers";
-import { getCachedExtraction, saveCachedExtraction } from "./db";
 
 interface ProviderConfig {
   endpoint: string;
@@ -527,31 +526,18 @@ export interface ExtractOptions {
   /** Called when the chain falls back to a different model or sleeps for a
    * retry, so the UI can keep the user informed instead of looking frozen. */
   onProgress?: (message: string) => void;
-  /** Skip the content-hash cache and force a fresh LLM call. Used when the
-   * user explicitly wants to re-run extraction (e.g. after editing the
-   * prompt or believing the cached result is wrong). */
-  bypassCache?: boolean;
 }
 
 /** Bumping this string invalidates every cached extraction so users pick up
  * a new prompt immediately without manually clearing storage. Bump whenever
  * SYSTEM_PROMPT changes in a way that would yield a meaningfully different
  * output (new field, stricter rules, etc.). */
-const PROMPT_VERSION = "v7-program-degree";
+export const PROMPT_VERSION = "v7-program-degree";
 
-/** SHA-256 hash of the parsed input bytes plus the prompt version. Stable
- * across runs for the same file + prompt, so the same offer always maps to
- * the same key — that's what kills the "gacha" effect — but a prompt bump
- * naturally evicts every old entry. */
-async function hashInput(input: ParsedInput): Promise<string> {
-  const enc = new TextEncoder();
-  const data = enc.encode(
-    [PROMPT_VERSION, input.kind, input.text, ...input.images].join(""),
-  );
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+/** Build the L2 (extraction) cache key. Bumping PROMPT_VERSION naturally
+ * invalidates every cached extraction in one stroke. */
+export function extractionCacheKey(fileHash: string): string {
+  return `${fileHash}:${PROMPT_VERSION}`;
 }
 
 /** HTTP statuses that mean "try again later or with a different model". */
@@ -592,6 +578,11 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/**
+ * Run the LLM extraction. Cache lookups + writes are now the *caller's*
+ * responsibility (App.tsx) so the loading-bar UX can branch on cache-hit
+ * before kicking off any work. extractOffer always calls the model.
+ */
 export async function extractOffer(
   input: ParsedInput,
   opts: ExtractOptions
@@ -599,18 +590,6 @@ export async function extractOffer(
   const provider = opts.provider ?? DEFAULT_PROVIDER;
   const config = PROVIDERS[provider];
   const userModel = opts.model || config.defaultModel;
-
-  // Content-hash cache: same file in → same reading out. Skips the model
-  // entirely on a hit, which both eliminates "gacha" variance and avoids
-  // burning quota on a re-upload of an offer the user already extracted.
-  const inputHash = await hashInput(input);
-  if (!opts.bypassCache) {
-    const cached = await getCachedExtraction(inputHash);
-    if (cached) {
-      opts.onProgress?.("命中本地缓存（同一份 offer 之前抽过）");
-      return cached;
-    }
-  }
 
   // Try the user's chosen model first, then escalate through siblings on the
   // same provider when the chosen one is overloaded / rate-limited. Each model
@@ -629,20 +608,7 @@ export async function extractOffer(
       opts.onProgress?.(`上一个模型暂不可用，已切到 ${label}…`);
     }
     try {
-      const extracted = await extractWithRetry(
-        input,
-        opts,
-        provider,
-        config,
-        model,
-      );
-      // Persist before returning so the next upload of the same content
-      // skips the LLM. Failure to persist is non-fatal — the caller still
-      // gets the extraction, the cache will just miss next time.
-      saveCachedExtraction(inputHash, extracted, model).catch((err) => {
-        console.warn("failed to cache extraction", err);
-      });
-      return extracted;
+      return await extractWithRetry(input, opts, provider, config, model);
     } catch (err) {
       lastError = err;
       if (!isTransientError(err)) throw err;

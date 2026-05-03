@@ -68,3 +68,42 @@ export function uuid(): string {
     return v.toString(16);
   });
 }
+
+/** SHA-256 of the raw bytes of a File. Used as the L1 / L2 cache key —
+ * stable across renders and exact (any byte change → new hash → fresh
+ * extraction). */
+export async function hashFileBytes(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** SHA-256 of an arbitrary string. Used for hashing pasted text where
+ * there's no File object to hash. */
+export async function hashString(s: string): Promise<string> {
+  const buffer = new TextEncoder().encode(s);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/** Build the L3 (research) cache key by normalizing school + program names.
+ * Same school written "The University of Hong Kong" / "the university of
+ * hong kong " / "THE  UNIVERSITY OF HONG KONG" should all hit the same
+ * row. Same for program with extra whitespace, casing, or punctuation. */
+export function researchCacheKey(school: string, program: string): string {
+  return `${normalizeForKey(school)}|${normalizeForKey(program)}`;
+}
+
+function normalizeForKey(s: string): string {
+  return s
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[\s　]+/g, " ")
+    // Strip punctuation that doesn't carry meaning for matching.
+    .replace(/[.,/\\;:!?'"`(){}\[\]<>·、，。：；！？「」『』《》（）]/g, "")
+    .trim();
+}
