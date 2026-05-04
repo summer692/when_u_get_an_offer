@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { clearAllCaches, getSettings, setSetting } from "../lib/db";
+import { readExtractionLog, type ExtractionLogEntry } from "../lib/debugLog";
 import { DEFAULT_PROVIDER, PROVIDERS } from "../lib/llm";
 import type { Provider } from "../lib/schema";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -17,7 +18,7 @@ const PROVIDER_META: Record<
   zhipu: {
     label: "智谱 BigModel",
     keyHint:
-      "国内可直连（无需 VPN）。新用户注册即送 2000 万 token，GLM-4V-Flash 完全免费。仅存储在你的浏览器中。",
+      "国内可直连（无需 VPN）。默认 GLM-4.6V-Flash 约 ¥0.005/份 offer，新用户注册送 2000 万 token，足够测试很久。仅存储在你的浏览器中。",
     keyUrl: "https://open.bigmodel.cn/usercenter/apikeys",
     placeholder: "xxxxxxxx.xxxxxxxx",
   },
@@ -66,6 +67,14 @@ export function SettingsSheet({ open, onClose }: Props) {
   const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER].defaultModel);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [clearStatus, setClearStatus] = useState<"idle" | "done">("idle");
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [debugEntries, setDebugEntries] = useState<ExtractionLogEntry[]>([]);
+
+  // Re-read the debug log every time the modal opens so the user always
+  // sees the latest extraction. localStorage isn't reactive.
+  useEffect(() => {
+    if (debugOpen) setDebugEntries(readExtractionLog());
+  }, [debugOpen]);
 
   async function handleClearCache() {
     await clearAllCaches();
@@ -166,6 +175,22 @@ export function SettingsSheet({ open, onClose }: Props) {
         </div>
 
         <div className="mt-10 pt-8 border-t border-ink-100 dark:border-ink-700">
+          <div className="section-label mb-3">抽取调试</div>
+          <div className="text-xs text-ink-500 leading-relaxed mb-4">
+            如果某次抽取结果明显不对，可以查看 LLM 实际返回的原始内容，
+            复制反馈给开发者排查。仅保留最近 5 次。
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setDebugOpen(true)}
+              className="text-xs px-4 py-2 rounded-full border border-ink-200 dark:border-ink-700 text-ink-700 dark:text-ink-300 hover:border-ink-900 hover:text-ink-900 dark:hover:border-white dark:hover:text-white transition-colors"
+            >
+              查看最近抽取
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-10 pt-8 border-t border-ink-100 dark:border-ink-700">
           <div className="section-label mb-3">本地缓存</div>
           <div className="text-xs text-ink-500 leading-relaxed mb-4">
             为了节省 token、加快重复上传，OfferLens 会在本地保留已经处理过的
@@ -202,6 +227,12 @@ export function SettingsSheet({ open, onClose }: Props) {
           }
           onConfirm={handleClearCache}
           onCancel={() => setConfirmingClear(false)}
+        />
+
+        <DebugModal
+          open={debugOpen}
+          entries={debugEntries}
+          onClose={() => setDebugOpen(false)}
         />
       </div>
     </Modal>
@@ -255,5 +286,93 @@ function Field({
         <div className="text-xs text-ink-500 mt-3 leading-relaxed">{hint}</div>
       )}
     </div>
+  );
+}
+
+function DebugModal({
+  open,
+  entries,
+  onClose,
+}: {
+  open: boolean;
+  entries: ExtractionLogEntry[];
+  onClose: () => void;
+}) {
+  async function copyEntry(e: ExtractionLogEntry) {
+    const text = [
+      `time: ${new Date(e.at).toLocaleString()}`,
+      `provider/model: ${e.provider} / ${e.model}`,
+      `looksOk: ${e.looksOk}`,
+      `--- raw content ---`,
+      e.rawContent,
+      `--- normalized ---`,
+      JSON.stringify(e.normalized, null, 2),
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // older / private-mode browsers — fall back to selectable textarea
+    }
+  }
+  return (
+    <Modal open={open} onClose={onClose}>
+      <div className="p-7 md:p-8 max-h-[80vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-display font-medium tracking-tight">
+            最近 {entries.length} 次抽取
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-ink-500 hover:text-ink-900 dark:hover:text-white text-2xl leading-none"
+            aria-label="关闭"
+          >
+            ×
+          </button>
+        </div>
+        {entries.length === 0 ? (
+          <p className="text-sm text-ink-500">还没有抽取记录。</p>
+        ) : (
+          <div className="space-y-5">
+            {entries.map((e, i) => (
+              <div
+                key={i}
+                className="border border-ink-100 dark:border-ink-700 rounded-card p-4 text-xs"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-ink-700 dark:text-ink-300">
+                    <span className="tabular">
+                      {new Date(e.at).toLocaleString()}
+                    </span>
+                    <span className="mx-2 text-ink-300 dark:text-ink-600">·</span>
+                    <span>
+                      {e.provider} / {e.model}
+                    </span>
+                    <span className="mx-2 text-ink-300 dark:text-ink-600">·</span>
+                    <span
+                      className={
+                        e.looksOk
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-red-600 dark:text-red-400"
+                      }
+                    >
+                      {e.looksOk ? "✓ 看着 OK" : "⚠ 字段缺失"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => copyEntry(e)}
+                    className="text-xs px-3 py-1 rounded-full border border-ink-200 dark:border-ink-700 hover:border-ink-900 dark:hover:border-white transition-colors"
+                  >
+                    复制全文
+                  </button>
+                </div>
+                <pre className="whitespace-pre-wrap break-all bg-ink-50 dark:bg-ink-900 p-3 rounded leading-relaxed font-mono text-[11px] max-h-[40vh] overflow-y-auto">
+                  {e.rawContent}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }

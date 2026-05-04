@@ -1,6 +1,7 @@
 import { jsonrepair } from "jsonrepair";
 import type { ExtractedOffer, Condition, MustDo, Provider } from "./schema";
 import { stripMarkdown } from "./format";
+import { recordExtractionLog } from "./debugLog";
 import type { ParsedInput } from "./parsers";
 
 interface ProviderConfig {
@@ -63,23 +64,29 @@ export const PROVIDERS: Record<Provider, ProviderConfig> = {
     // extractOnce code path works unchanged. Reachable from mainland
     // China without VPN, which is why we surface it as the default
     // provider for Chinese-timezone users.
+    //
+    // Default model is GLM-4.6V-Flash, not the free GLM-4V-Flash —
+    // testing showed GLM-4V-Flash is too small for our 8000+ char prompt
+    // and routinely returns malformed JSON (arrays instead of objects,
+    // repetition loops on phrases like "Programme Fee"). A few cents per
+    // offer for GLM-4.6V-Flash is well worth the reliability.
     endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-    defaultModel: "glm-4v-flash",
+    defaultModel: "glm-4.6v-flash",
     models: [
-      {
-        id: "glm-4v-flash",
-        label: "GLM-4V-Flash",
-        note: "免费 · 国内推荐",
-      },
       {
         id: "glm-4.6v-flash",
         label: "GLM-4.6V-Flash",
-        note: "更准 · 付费（约 ¥0.005/份 offer）",
+        note: "推荐 · 国内可用 · 约 ¥0.005/份 offer",
       },
       {
         id: "glm-4.6v",
         label: "GLM-4.6V",
-        note: "旗舰 · 付费",
+        note: "旗舰 · 复杂 offer 用",
+      },
+      {
+        id: "glm-4v-flash",
+        label: "GLM-4V-Flash",
+        note: "免费 · 仅适合简单 offer，可能抽错",
       },
     ],
   },
@@ -766,21 +773,35 @@ async function extractOnce(
       model,
       response: json,
     });
+    recordExtractionLog({
+      provider,
+      model,
+      looksOk: false,
+      rawContent: JSON.stringify(json).slice(0, 6000),
+      normalized: null,
+    });
     throw new Error("LLM returned empty content");
   }
 
   const parsed = safeJsonParse(content);
   const normalized = normalizeExtracted(parsed);
+  const looksOk =
+    normalized.school !== "Unknown school" &&
+    !!normalized.school &&
+    !!normalized.program;
 
-  // Diagnostic: when the model didn't even produce a school name, surface
-  // the raw response so the user can paste it back to us. Almost always
-  // means the image wasn't readable / wasn't sent / model errored. The
-  // generic "Unknown school" placeholder otherwise hides the real cause.
-  if (
-    normalized.school === "Unknown school" ||
-    !normalized.school ||
-    !normalized.program
-  ) {
+  // Always record — both the failure path and the success path. The
+  // debug button shows the most recent few; users hand this to support
+  // when an extraction looked wrong, without needing DevTools.
+  recordExtractionLog({
+    provider,
+    model,
+    looksOk,
+    rawContent: content,
+    normalized,
+  });
+
+  if (!looksOk) {
     console.warn(
       "[OfferLens] Extraction returned without a school name. Raw response below — paste this if reporting a bug.",
     );
@@ -822,7 +843,24 @@ function safeJsonParse(text: string): unknown {
 }
 
 function normalizeExtracted(raw: unknown): ExtractedOffer {
-  const r = raw as Partial<ExtractedOffer> | null | undefined;
+  // Smaller multimodal models (notably GLM-4V-Flash) sometimes wrap their
+  // output in a JSON array — `[{...real fields...}, {...garbage...}]` — even
+  // when the prompt explicitly asks for a single object. Take the first
+  // element if it looks like an offer-shaped object so we don't wholesale
+  // fall back to "Unknown school" when there's salvageable data.
+  let candidate: unknown = raw;
+  if (Array.isArray(raw) && raw.length > 0) {
+    const first = raw[0];
+    if (
+      first &&
+      typeof first === "object" &&
+      !Array.isArray(first) &&
+      typeof (first as { school?: unknown }).school === "string"
+    ) {
+      candidate = first;
+    }
+  }
+  const r = candidate as Partial<ExtractedOffer> | null | undefined;
   const out: ExtractedOffer = {
     school: r?.school ?? "Unknown school",
     school_zh: r?.school_zh ?? undefined,
