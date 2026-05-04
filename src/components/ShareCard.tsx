@@ -374,7 +374,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         {showSpec.faculty && (
           <Spec
             label="学院"
-            value={facultyZh ?? offer.student_category ?? "—"}
+            value={facultyZh ?? "—"}
           />
         )}
       </div>}
