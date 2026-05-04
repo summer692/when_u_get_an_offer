@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - claude/offer-extraction-tool-wkgz5
+      - claude/design-offer-display-HY9o9
   workflow_dispatch:
 
 permissions:
