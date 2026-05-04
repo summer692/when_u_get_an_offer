@@ -9,8 +9,7 @@ interface Props {
 export function Hero({ onFile, onText, busy }: Props) {
   return (
     <section className="min-h-[calc(100vh-56px)] flex flex-col items-center justify-center px-6 text-center fade-up">
-      <div className="section-label mb-10">Offer Reader</div>
-      <h1 className="font-display font-medium text-hero max-w-4xl tracking-[-0.04em] leading-[0.95]">
+      <h1 className="font-display font-medium text-hero max-w-none whitespace-nowrap tracking-[-0.04em] leading-[0.95]">
         你的 offer，一眼看清。
       </h1>
       <p className="mt-10 text-base md:text-lg text-ink-500 max-w-xl leading-relaxed">
