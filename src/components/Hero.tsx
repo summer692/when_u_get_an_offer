@@ -21,7 +21,7 @@ export function Hero({ onFile, onText, busy }: Props) {
         <UploadZone onFile={onFile} onText={onText} disabled={busy} />
       </div>
 
-      <div className="mt-10 text-xs text-ink-500 tracking-wide">
+      <div className="mt-6 text-xs text-ink-500 tracking-wide">
         文件不会离开你的设备 · 只有你能看到
       </div>
     </section>
