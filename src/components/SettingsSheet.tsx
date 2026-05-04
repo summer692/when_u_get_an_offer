@@ -77,10 +77,19 @@ export function SettingsSheet({ open, onClose }: Props) {
   }, [debugOpen]);
 
   async function handleClearCache() {
-    await clearAllCaches();
+    // Close the dialog immediately so the user gets visual confirmation
+    // their click registered, even if the IndexedDB clear takes a moment
+    // or hits a transaction lock. Show the "已清空" pill once the work
+    // finishes; on failure, surface a console error and don't lie.
     setConfirmingClear(false);
-    setClearStatus("done");
-    setTimeout(() => setClearStatus("idle"), 2400);
+    try {
+      await clearAllCaches();
+      setClearStatus("done");
+      setTimeout(() => setClearStatus("idle"), 2400);
+    } catch (err) {
+      console.error("[OfferLens] clearAllCaches failed", err);
+      setClearStatus("idle");
+    }
   }
 
   useEffect(() => {
@@ -103,10 +112,19 @@ export function SettingsSheet({ open, onClose }: Props) {
   }
 
   async function save() {
-    await setSetting("provider", provider);
-    await setSetting("apiKey", apiKey.trim() || undefined);
-    await setSetting("model", model.trim() || PROVIDERS[provider].defaultModel);
+    // Close the panel immediately — user clicked "保存", they don't want
+    // to wait for IndexedDB to finish. Writes happen in the background;
+    // by the time the next upload reads settings, they'll be persisted.
     onClose();
+    try {
+      await Promise.all([
+        setSetting("provider", provider),
+        setSetting("apiKey", apiKey.trim() || undefined),
+        setSetting("model", model.trim() || PROVIDERS[provider].defaultModel),
+      ]);
+    } catch (err) {
+      console.error("[OfferLens] failed to persist settings", err);
+    }
   }
 
   const meta = PROVIDER_META[provider];
