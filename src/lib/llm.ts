@@ -57,6 +57,32 @@ export const PROVIDERS: Record<Provider, ProviderConfig> = {
       { id: "openai/gpt-4o-mini", label: "GPT-4o mini" },
     ],
   },
+  zhipu: {
+    // 智谱 BigModel — OpenAI-compatible chat completions endpoint. Same
+    // multimodal request shape as Google AI Studio, so the existing
+    // extractOnce code path works unchanged. Reachable from mainland
+    // China without VPN, which is why we surface it as the default
+    // provider for Chinese-timezone users.
+    endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    defaultModel: "glm-4v-flash",
+    models: [
+      {
+        id: "glm-4v-flash",
+        label: "GLM-4V-Flash",
+        note: "免费 · 国内推荐",
+      },
+      {
+        id: "glm-4.6v-flash",
+        label: "GLM-4.6V-Flash",
+        note: "更准 · 付费（约 ¥0.005/份 offer）",
+      },
+      {
+        id: "glm-4.6v",
+        label: "GLM-4.6V",
+        note: "旗舰 · 付费",
+      },
+    ],
+  },
 };
 
 export const DEFAULT_PROVIDER: Provider = "google";

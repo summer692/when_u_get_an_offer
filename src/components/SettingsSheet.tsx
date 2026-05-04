@@ -14,6 +14,13 @@ const PROVIDER_META: Record<
   Provider,
   { label: string; keyHint: string; keyUrl: string; placeholder: string }
 > = {
+  zhipu: {
+    label: "智谱 BigModel",
+    keyHint:
+      "国内可直连（无需 VPN）。新用户注册即送 2000 万 token，GLM-4V-Flash 完全免费。仅存储在你的浏览器中。",
+    keyUrl: "https://open.bigmodel.cn/usercenter/apikeys",
+    placeholder: "xxxxxxxx.xxxxxxxx",
+  },
   google: {
     label: "Google AI Studio",
     keyHint: "免费层每日有限额，超额请切到 Flash-Lite 或明天再试。仅存储在你的浏览器中。",
@@ -27,6 +34,31 @@ const PROVIDER_META: Record<
     placeholder: "sk-or-...",
   },
 };
+
+/** Regions that match a mainland-China-/HK-/Macau-leaning IANA time zone.
+ * Used as a smart default for first-time users — they see the 智谱 option
+ * pre-selected with a "国内推荐" badge so they don't have to know they need
+ * a domestic-friendly provider. */
+const CHINA_TIMEZONES = new Set([
+  "Asia/Shanghai",
+  "Asia/Chongqing",
+  "Asia/Urumqi",
+  "Asia/Harbin",
+  "Asia/Hong_Kong",
+  "Asia/Macau",
+  "Asia/Macao",
+  "Asia/Kashgar",
+]);
+
+function detectDefaultProvider(): Provider {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz && CHINA_TIMEZONES.has(tz)) return "zhipu";
+  } catch {
+    /* fall through */
+  }
+  return DEFAULT_PROVIDER;
+}
 
 export function SettingsSheet({ open, onClose }: Props) {
   const [provider, setProvider] = useState<Provider>(DEFAULT_PROVIDER);
@@ -45,7 +77,9 @@ export function SettingsSheet({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     getSettings().then((s) => {
-      const p = s.provider ?? DEFAULT_PROVIDER;
+      // First-time users: pick the provider best suited to their region.
+      // Returning users: respect whatever they previously saved.
+      const p = s.provider ?? detectDefaultProvider();
       setProvider(p);
       setApiKey(s.apiKey ?? "");
       setModel(s.model ?? PROVIDERS[p].defaultModel);

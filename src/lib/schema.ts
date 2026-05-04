@@ -134,7 +134,7 @@ export interface Offer extends ExtractedOffer {
   share_visibility?: Record<string, boolean>;
 }
 
-export type Provider = "google" | "openrouter";
+export type Provider = "google" | "openrouter" | "zhipu";
 
 export interface Settings {
   provider?: Provider;
