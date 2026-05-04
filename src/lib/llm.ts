@@ -1385,14 +1385,13 @@ export function applyResearch<T extends ExtractedOffer>(
 
   if (research.tuition) {
     const existing = merged.fees!.tuition;
-    const existingIsAuthoritative =
-      existing &&
-      existing.amount > 0 &&
-      !existing.is_partial &&
-      !existing.is_estimate &&
-      !existing.manually_edited;
+    // Once the offer itself names a tuition number — even an annual
+    // estimate or a "first installment" figure — that's the source of
+    // truth the student wants to see. Research only fills the gap when
+    // the offer has nothing.
+    const offerProvidedAmount = !!existing && existing.amount > 0;
     const userVerified = existing?.manually_edited === true;
-    if (!userVerified && !existingIsAuthoritative) {
+    if (!userVerified && !offerProvidedAmount) {
       merged.fees!.tuition = {
         ...research.tuition,
         is_partial: false,
@@ -1405,9 +1404,9 @@ export function applyResearch<T extends ExtractedOffer>(
         is_estimate: !research.tuition.source,
       };
       researched.add("tuition");
-    } else if (userVerified || existingIsAuthoritative) {
-      // The offer itself was authoritative — make sure we don't claim it
-      // as "researched" if a previous run had marked it so.
+    } else {
+      // The offer itself supplied the number — make sure a previous run
+      // hadn't marked it as "researched".
       researched.delete("tuition");
     }
   }
