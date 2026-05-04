@@ -560,10 +560,17 @@ export interface ExtractOptions {
  * output (new field, stricter rules, etc.). */
 export const PROMPT_VERSION = "v8-verified-source";
 
-/** Build the L2 (extraction) cache key. Bumping PROMPT_VERSION naturally
- * invalidates every cached extraction in one stroke. */
-export function extractionCacheKey(fileHash: string): string {
-  return `${fileHash}:${PROMPT_VERSION}`;
+/** Build the L2 (extraction) cache key. Includes the provider + model so
+ * different LLM combos don't share — picking a different provider should
+ * mean a fresh extraction, not a stale cached result from a previous one.
+ * Bumping PROMPT_VERSION still invalidates the whole cache as a wholesale
+ * eviction. */
+export function extractionCacheKey(
+  fileHash: string,
+  provider: Provider,
+  model: string,
+): string {
+  return `${fileHash}:${PROMPT_VERSION}:${provider}:${model}`;
 }
 
 /** HTTP statuses that mean "try again later or with a different model". */
@@ -754,11 +761,36 @@ async function extractOnce(
   const json = await res.json();
   const content: string | undefined = json?.choices?.[0]?.message?.content;
   if (!content) {
+    console.error("[OfferLens] LLM returned empty content", {
+      provider,
+      model,
+      response: json,
+    });
     throw new Error("LLM returned empty content");
   }
 
   const parsed = safeJsonParse(content);
-  return normalizeExtracted(parsed);
+  const normalized = normalizeExtracted(parsed);
+
+  // Diagnostic: when the model didn't even produce a school name, surface
+  // the raw response so the user can paste it back to us. Almost always
+  // means the image wasn't readable / wasn't sent / model errored. The
+  // generic "Unknown school" placeholder otherwise hides the real cause.
+  if (
+    normalized.school === "Unknown school" ||
+    !normalized.school ||
+    !normalized.program
+  ) {
+    console.warn(
+      "[OfferLens] Extraction returned without a school name. Raw response below — paste this if reporting a bug.",
+    );
+    console.warn("provider/model:", provider, model);
+    console.warn("raw content:", content);
+    console.warn("parsed JSON:", parsed);
+    console.warn("normalized:", normalized);
+  }
+
+  return normalized;
 }
 
 function safeJsonParse(text: string): unknown {

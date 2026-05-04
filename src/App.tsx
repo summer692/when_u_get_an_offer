@@ -9,6 +9,8 @@ import { useOffers } from "./hooks/useOffers";
 import { useTheme } from "./hooks/useTheme";
 import { parseFile, parseText, type ParsedInput } from "./lib/parsers";
 import {
+  DEFAULT_PROVIDER,
+  PROVIDERS,
   applyResearch,
   extractOffer,
   extractionCacheKey,
@@ -25,7 +27,7 @@ import {
   saveCachedResearch,
 } from "./lib/db";
 import { hashFileBytes, hashString, researchCacheKey, uuid } from "./lib/format";
-import type { ExtractedOffer, Offer } from "./lib/schema";
+import type { ExtractedOffer, Offer, Provider } from "./lib/schema";
 
 const FAST_PATH_DELAY_MS = 1500;
 
@@ -83,12 +85,17 @@ export default function App() {
   );
 
   /** Normal path: extract via LLM, optionally run research, save. Caller
-   * is responsible for L1 (OCR) and L2 (extraction) cache lookups before
-   * deciding to come here; we still do L3 (research) in here because it
-   * runs after extraction and is keyed off the extracted school+program. */
+   * resolves provider/model first so the same trio drives both the cache
+   * lookup and the actual API call — picking a different provider must
+   * mean a fresh extraction, not a stale cached result. */
   const runFullExtraction = useCallback(
-    async (input: ParsedInput, fileHash: string) => {
-      const { apiKey, provider, model } = await ensureKey();
+    async (
+      input: ParsedInput,
+      fileHash: string,
+      apiKey: string,
+      provider: Provider,
+      model: string,
+    ) => {
       setQuickMode(false);
       setStage("OfferLens 阅读中，请站在此地不要动......");
       let extracted: ExtractedOffer = await extractOffer(input, {
@@ -101,10 +108,9 @@ export default function App() {
         },
       });
 
-      // Write through to L2 immediately so a subsequent re-upload skips
-      // the LLM entirely. Failure is non-fatal.
-      saveCachedExtraction(extractionCacheKey(fileHash), extracted).catch(
-        (err) => console.warn("L2 cache write failed", err),
+      const cacheKey = extractionCacheKey(fileHash, provider, model);
+      saveCachedExtraction(cacheKey, extracted).catch((err) =>
+        console.warn("L2 cache write failed", err),
       );
 
       const needsResearch =
@@ -132,10 +138,9 @@ export default function App() {
               // Refresh L2 with the post-research extraction so the next
               // re-upload of the same file pays neither the extraction
               // nor the research cost.
-              saveCachedExtraction(
-                extractionCacheKey(fileHash),
-                extracted,
-              ).catch((err) => console.warn("L2 refresh failed", err));
+              saveCachedExtraction(cacheKey, extracted).catch((err) =>
+                console.warn("L2 refresh failed", err),
+              );
             }
           } catch (err) {
             console.warn("research step failed, keeping initial extraction", err);
@@ -145,7 +150,7 @@ export default function App() {
 
       await persistAndOpen(extracted, input);
     },
-    [ensureKey, persistAndOpen],
+    [persistAndOpen],
   );
 
   const handleFile = useCallback(
@@ -155,19 +160,23 @@ export default function App() {
         setQuickMode(false);
         setStage("OfferLens 阅读中，请站在此地不要动......");
 
-        // Hash the raw file bytes — stable across renders, exact, and
-        // available before any expensive work (parseFile / LLM).
-        const fileHash = await hashFileBytes(file);
+        // Resolve provider+model first so we can include them in the
+        // cache key. Different (provider, model) trios produce different
+        // extractions — they must NOT share cache entries.
+        const { apiKey, provider, model } = await ensureKey();
+        const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+        const resolvedModel = model ?? PROVIDERS[resolvedProvider].defaultModel;
 
-        // L2 first: a cached extraction means we never need to OCR or
-        // call the LLM at all.
-        const cachedExtraction = await getCachedExtraction(
-          extractionCacheKey(fileHash),
+        const fileHash = await hashFileBytes(file);
+        const cacheKey = extractionCacheKey(
+          fileHash,
+          resolvedProvider,
+          resolvedModel,
         );
+
+        // L2: a cached extraction means we skip OCR and the LLM call.
+        const cachedExtraction = await getCachedExtraction(cacheKey);
         if (cachedExtraction) {
-          // Synthesize a minimal ParsedInput so persistAndOpen can stamp
-          // the source_kind / source_name fields. We don't need the
-          // actual text — the extraction is already done.
           const placeholder: ParsedInput = {
             kind: "pdf",
             text: "",
@@ -187,14 +196,20 @@ export default function App() {
           );
         }
 
-        await runFullExtraction(parsed, fileHash);
+        await runFullExtraction(
+          parsed,
+          fileHash,
+          apiKey,
+          resolvedProvider,
+          resolvedModel,
+        );
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
         setStage(null);
       }
     },
-    [runFromCache, runFullExtraction],
+    [ensureKey, runFromCache, runFullExtraction],
   );
 
   const handleText = useCallback(
@@ -204,23 +219,36 @@ export default function App() {
         setQuickMode(false);
         setStage("OfferLens 阅读中,请站在此地不要动......");
 
-        // Pasted text has no File object — hash the string itself.
+        const { apiKey, provider, model } = await ensureKey();
+        const resolvedProvider = provider ?? DEFAULT_PROVIDER;
+        const resolvedModel = model ?? PROVIDERS[resolvedProvider].defaultModel;
+
         const textHash = await hashString(text);
-        const cachedExtraction = await getCachedExtraction(
-          extractionCacheKey(textHash),
+        const cacheKey = extractionCacheKey(
+          textHash,
+          resolvedProvider,
+          resolvedModel,
         );
+
+        const cachedExtraction = await getCachedExtraction(cacheKey);
         if (cachedExtraction) {
           await runFromCache(cachedExtraction, parseText(text));
           return;
         }
-        await runFullExtraction(parseText(text), textHash);
+        await runFullExtraction(
+          parseText(text),
+          textHash,
+          apiKey,
+          resolvedProvider,
+          resolvedModel,
+        );
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
         setStage(null);
       }
     },
-    [runFromCache, runFullExtraction],
+    [ensureKey, runFromCache, runFullExtraction],
   );
 
   useEffect(() => {
