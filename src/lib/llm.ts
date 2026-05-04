@@ -10,6 +10,16 @@ interface ProviderConfig {
   /** Optional extra headers (e.g. OpenRouter analytics) */
   extraHeaders?: () => Record<string, string>;
   models: { id: string; label: string; note?: string }[];
+  /** Whether to send `response_format: { type: "json_object" }`. Most
+   * OpenAI-compatible providers interpret this as "JSON conforming to
+   * the schema described in the prompt"; 智谱 specifically interprets
+   * it as "any valid JSON, ignore the schema" and produces off-schema
+   * garbage. Default true; set false on providers that misbehave. */
+  jsonMode?: boolean;
+  /** Whether to send `top_p: 0` for greedy / deterministic decoding.
+   * Some providers reject `top_p: 0` as out-of-range and either error
+   * or silently fall back to default. Default true. */
+  greedyTopP?: boolean;
 }
 
 export const PROVIDERS: Record<Provider, ProviderConfig> = {
@@ -70,8 +80,20 @@ export const PROVIDERS: Record<Provider, ProviderConfig> = {
     // and routinely returns malformed JSON (arrays instead of objects,
     // repetition loops on phrases like "Programme Fee"). A few cents per
     // offer for GLM-4.6V-Flash is well worth the reliability.
+    //
+    // jsonMode=false: 智谱 reads `response_format: json_object` as "emit
+    // ANY valid JSON, the schema in the system prompt is hints not law"
+    // and ships back made-up keys (offer_date / offer_type / etc.).
+    // Without the flag set, the model falls back to following the
+    // system prompt's JSON schema description, and our safeJsonParse
+    // ladder (strict → fenced → brace-slice → jsonrepair) absorbs any
+    // formatting noise.
+    //
+    // greedyTopP=false: 智谱's API rejects top_p: 0 as out-of-range.
     endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
     defaultModel: "glm-4.6v-flash",
+    jsonMode: false,
+    greedyTopP: false,
     models: [
       {
         id: "glm-4.6v-flash",
@@ -724,23 +746,28 @@ async function extractOnce(
     ...(config.extraHeaders?.() ?? {}),
   };
 
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userContent },
+    ],
+    temperature: 0,
+  };
+  // Per-provider quirks: see ProviderConfig comments above and the
+  // 智谱 entry in PROVIDERS for why these are flagged off there.
+  if (config.jsonMode !== false) {
+    requestBody.response_format = { type: "json_object" };
+  }
+  if (config.greedyTopP !== false) {
+    requestBody.top_p = 0;
+  }
+
   const res = await fetch(config.endpoint, {
     method: "POST",
     signal: opts.signal,
     headers,
-    body: JSON.stringify({
-      model,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-      // temp 0 + top_p 0 forces greedy decoding — picks the highest-probability
-      // token at every step. Combined with content-hash caching this is the
-      // strongest determinism guarantee the API surface allows.
-      temperature: 0,
-      top_p: 0,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!res.ok) {
