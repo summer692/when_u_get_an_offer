@@ -44,11 +44,14 @@ export default function App() {
 
   const ensureKey = useCallback(async () => {
     const s = await getSettings();
-    if (!s.apiKey) {
+    const provider = s.provider ?? DEFAULT_PROVIDER;
+    // Per-provider key wins; legacy single apiKey is the fallback.
+    const apiKey = s.apiKeys?.[provider] ?? s.apiKey;
+    if (!apiKey) {
       setSettingsOpen(true);
       throw new Error("请先在设置中填入 API Key");
     }
-    return { apiKey: s.apiKey, provider: s.provider, model: s.model };
+    return { apiKey, provider, model: s.model };
   }, []);
 
   /** Common tail: build the Offer record from a finished ExtractedOffer

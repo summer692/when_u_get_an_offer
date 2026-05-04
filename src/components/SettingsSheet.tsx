@@ -63,7 +63,13 @@ function detectDefaultProvider(): Provider {
 
 export function SettingsSheet({ open, onClose }: Props) {
   const [provider, setProvider] = useState<Provider>(DEFAULT_PROVIDER);
-  const [apiKey, setApiKey] = useState("");
+  // One key per provider so switching provider doesn't blow away the
+  // other key the user already entered.
+  const [keys, setKeys] = useState<Record<Provider, string>>({
+    google: "",
+    openrouter: "",
+    zhipu: "",
+  });
   const [model, setModel] = useState(PROVIDERS[DEFAULT_PROVIDER].defaultModel);
   const [confirmingClear, setConfirmingClear] = useState(false);
   const [clearStatus, setClearStatus] = useState<"idle" | "done">("idle");
@@ -99,7 +105,16 @@ export function SettingsSheet({ open, onClose }: Props) {
       // Returning users: respect whatever they previously saved.
       const p = s.provider ?? detectDefaultProvider();
       setProvider(p);
-      setApiKey(s.apiKey ?? "");
+      // Migrate legacy single apiKey → assign it to whichever provider
+      // was active when it was saved.
+      const stored = s.apiKeys ?? {};
+      const legacy = s.apiKey;
+      setKeys({
+        google: stored.google ?? (p === "google" ? legacy ?? "" : ""),
+        openrouter:
+          stored.openrouter ?? (p === "openrouter" ? legacy ?? "" : ""),
+        zhipu: stored.zhipu ?? (p === "zhipu" ? legacy ?? "" : ""),
+      });
       setModel(s.model ?? PROVIDERS[p].defaultModel);
     });
   }, [open]);
@@ -116,10 +131,18 @@ export function SettingsSheet({ open, onClose }: Props) {
     // to wait for IndexedDB to finish. Writes happen in the background;
     // by the time the next upload reads settings, they'll be persisted.
     onClose();
+    const trimmed: Partial<Record<Provider, string>> = {
+      google: keys.google.trim() || undefined,
+      openrouter: keys.openrouter.trim() || undefined,
+      zhipu: keys.zhipu.trim() || undefined,
+    };
     try {
       await Promise.all([
         setSetting("provider", provider),
-        setSetting("apiKey", apiKey.trim() || undefined),
+        setSetting("apiKeys", trimmed),
+        // Mirror the active provider's key into the legacy field so any
+        // older code path still finds something useful.
+        setSetting("apiKey", trimmed[provider]),
         setSetting("model", model.trim() || PROVIDERS[provider].defaultModel),
       ]);
     } catch (err) {
@@ -161,8 +184,10 @@ export function SettingsSheet({ open, onClose }: Props) {
           <Field label={`${meta.label} API Key`} hint={meta.keyHint}>
             <input
               type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              value={keys[provider]}
+              onChange={(e) =>
+                setKeys((k) => ({ ...k, [provider]: e.target.value }))
+              }
               placeholder={meta.placeholder}
               className="w-full px-4 py-3 bg-ink-100 dark:bg-ink-900 border border-transparent focus:border-ink-900 dark:focus:border-white focus:outline-none transition-colors"
             />

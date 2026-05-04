@@ -138,7 +138,12 @@ export type Provider = "google" | "openrouter" | "zhipu";
 
 export interface Settings {
   provider?: Provider;
+  /** Legacy single-key field. Kept for backward compatibility — new code
+   * writes to apiKeys[provider] but still falls back to this when no
+   * per-provider key has been saved yet. */
   apiKey?: string;
+  /** API key per provider, so switching provider doesn't lose other keys. */
+  apiKeys?: Partial<Record<Provider, string>>;
   model?: string;
   theme?: "system" | "light" | "dark";
   agencyName?: string;
