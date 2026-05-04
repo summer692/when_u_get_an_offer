@@ -245,8 +245,12 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
       // Wait one frame so the agency-logo prop change actually paints into
       // the offscreen ShareCards before we capture them.
       await new Promise((r) => requestAnimationFrame(() => r(null)));
-      const stamp = timestampStamp();
-      const base = `offer_${safeFilename(schoolZh)}_${stamp}`;
+      const programName = programZh || offer.program;
+      const base =
+        [offer.applicant_name, schoolZh, programName]
+          .filter((s): s is string => !!s && s.trim().length > 0)
+          .map((s) => safeFilename(s))
+          .join("_") || "offer";
 
       const items: PreviewItem[] = [];
       if (longMode) {
@@ -1342,15 +1346,6 @@ function hostOf(url: string): string {
   }
 }
 
-
-function timestampStamp(): string {
-  const d = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return (
-    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}` +
-    `_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
-  );
-}
 
 function sortedTodos(todos: MustDo[]): MustDo[] {
   const PRIORITY = { high: 0, medium: 1, low: 2 } as const;
