@@ -120,10 +120,15 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
     Number(showFee.tuition) +
     Number(showFee.deposit) +
     Number(showFee.scholarship);
+  const facultySlot: { label: string; value: string } | null = facultyZh
+    ? { label: "学院", value: facultyZh }
+    : offer.student_category
+      ? { label: "类别", value: offer.student_category }
+      : null;
   const showSpec = {
     duration: isVisibleInShare(offer, "duration"),
     term_start: isVisibleInShare(offer, "term_start"),
-    faculty: isVisibleInShare(offer, "faculty"),
+    faculty: isVisibleInShare(offer, "faculty") && facultySlot !== null,
   };
   const visibleSpecCount =
     Number(showSpec.duration) +
@@ -371,11 +376,8 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         {showSpec.term_start && (
           <Spec label="入学" value={termStartDisplay ?? "—"} tone="date" />
         )}
-        {showSpec.faculty && (
-          <Spec
-            label="学院"
-            value={facultyZh ?? "—"}
-          />
+        {showSpec.faculty && facultySlot && (
+          <Spec label={facultySlot.label} value={facultySlot.value} />
         )}
       </div>}
 
