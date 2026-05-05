@@ -704,7 +704,11 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
         </Section>
       </div>
 
-      {offer.info_gaps && offer.info_gaps.length > 0 && (() => {
+      {(() => {
+        // Re-prune at render time so offers extracted before pruneInfoGaps
+        // got smarter still benefit without forcing a re-upload.
+        const displayGaps = pruneInfoGaps(offer);
+        if (displayGaps.length === 0) return null;
         // Prefer the tuition page URL since 需要核实 is most often about
         // money. Fall back to scholarship's URL if only that surfaced.
         // Both are post-verification — researchOffer's hostMatchesSchool
@@ -718,7 +722,7 @@ export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
               需要核实
             </div>
             <ul className="space-y-2 text-amber-900 dark:text-amber-100">
-              {offer.info_gaps.map((g, i) => (
+              {displayGaps.map((g, i) => (
                 <li key={i} className="flex items-start gap-3">
                   <span className="mt-2 w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                   <span>{g}</span>
