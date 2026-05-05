@@ -84,6 +84,7 @@ export async function deleteOffer(id: string): Promise<void> {
 const SETTING_KEYS: (keyof Settings)[] = [
   "provider",
   "apiKey",
+  "apiKeys",
   "model",
   "theme",
   "agencyName",
