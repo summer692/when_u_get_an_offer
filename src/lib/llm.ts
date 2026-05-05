@@ -997,7 +997,11 @@ export function pruneInfoGaps(offer: ExtractedOffer): string[] {
     )
       return false;
     if (hasDuration && /(学制|时长|duration|学分.*总)/i.test(g)) return false;
-    if (hasCompleteTuition && /(学费|tuition).*(首期|不完整|未找到|总学费)/i.test(g))
+    if (
+      hasCompleteTuition &&
+      /(学费|tuition)/i.test(g) &&
+      /(总|完整|全部|整个|项目|未找到|未明确|首期|不完整)/i.test(g)
+    )
       return false;
     return true;
   });
