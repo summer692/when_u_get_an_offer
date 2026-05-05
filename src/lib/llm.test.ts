@@ -61,16 +61,20 @@ describe("computeInfoGaps — coverage-driven (v10+)", () => {
     ]);
   });
 
-  it("deposit required, amount given, but no deadline → flag deadline only", () => {
+  it("deposit required, no deposit deadline, no accept deadline → flag deadline", () => {
+    // Only flag when there's no deadline anywhere — when accept_deadline
+    // is stated, it usually doubles as the deposit deadline.
     const offer = makeOffer({
       coverage: {
         ...baseCoverage,
         deposit: "required_with_amount",
         deposit_deadline: "absent",
+        accept_deadline: "absent",
       },
     });
     expect(computeInfoGaps(offer)).toEqual([
       "留位费截止日期未在 offer 中明确。",
+      "接受 offer 截止日期未在 offer 中明确。",
     ]);
   });
 
@@ -132,6 +136,47 @@ describe("computeInfoGaps — coverage-driven (v10+)", () => {
     expect(computeInfoGaps(offer)).toEqual([
       "接受 offer 截止日期未在 offer 中明确。",
     ]);
+  });
+
+  it("Imperial bundled-deadline case: deposit required, accept deadline stated → no separate deposit-deadline gap", () => {
+    // Real-world Gemini extraction: offer says "pay 10% deposit to confirm
+    // acceptance by 24 Dec" — there's no SEPARATE deposit deadline, the
+    // accept deadline serves both. Coverage correctly reports
+    // deposit_deadline=absent, but a gap warning here is a false positive.
+    const offer = makeOffer({
+      fees: { deposit: { amount: 3860, currency: "GBP" } },
+      coverage: {
+        ...baseCoverage,
+        deposit: "required_with_amount",
+        deposit_deadline: "absent",
+        accept_deadline: "stated",
+      },
+    });
+    expect(computeInfoGaps(offer)).toEqual([]);
+  });
+
+  it("LLM misclassifies coverage but the amount is actually extracted → trust extracted data", () => {
+    // Real-world 智谱 case: amount £3,860 is correctly in fees.deposit,
+    // but coverage.deposit was incorrectly set to "required_no_amount".
+    // Cross-validation should suppress the false-positive amount gap.
+    const offer = makeOffer({
+      fees: { deposit: { amount: 3860, currency: "GBP" } },
+      coverage: {
+        ...baseCoverage,
+        deposit: "required_no_amount",
+        deposit_deadline: "absent",
+        accept_deadline: "stated",
+      },
+    });
+    expect(computeInfoGaps(offer)).toEqual([]);
+  });
+
+  it("coverage says tuition absent but extracted amount > 0 → no gap", () => {
+    const offer = makeOffer({
+      fees: { tuition: { amount: 50000, currency: "USD" } },
+      coverage: { ...baseCoverage, tuition: "absent" },
+    });
+    expect(computeInfoGaps(offer)).toEqual([]);
   });
 });
 

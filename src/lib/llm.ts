@@ -1063,30 +1063,59 @@ function computeInfoGapsFromCoverage(offer: ExtractedOffer): string[] {
   const c = offer.coverage!;
   const gaps: string[] = [];
 
-  if (c.tuition === "absent") {
+  // Cross-validate against extracted data. If we actually have a number /
+  // date, don't flag a gap regardless of how the LLM classified coverage —
+  // misclassification (智谱 setting deposit=required_no_amount when £3,860
+  // was right there in the offer) shouldn't surface as a false-positive
+  // warning to the student.
+
+  const hasTuition =
+    !!offer.fees?.tuition && offer.fees.tuition.amount > 0;
+  if (c.tuition === "absent" && !hasTuition) {
     gaps.push("学费未在 offer 中明确，请到学校官网核对。");
   }
 
-  if (c.deposit === "required_no_amount") {
+  const hasDepositAmount =
+    !!offer.fees?.deposit && offer.fees.deposit.amount > 0;
+  const depositRequired =
+    c.deposit === "required_with_amount" ||
+    c.deposit === "required_no_amount";
+  if (c.deposit === "required_no_amount" && !hasDepositAmount) {
     gaps.push("留位费金额未在 offer 中明确。");
   }
-  if (
-    (c.deposit === "required_with_amount" ||
-      c.deposit === "required_no_amount") &&
-    c.deposit_deadline === "absent"
-  ) {
+
+  // When deposit is required but no explicit deposit deadline, the
+  // acceptance deadline very commonly doubles as the deposit deadline
+  // ("pay deposit to confirm acceptance by X"). Don't flag that as
+  // missing — it isn't.
+  const hasDepositDeadline =
+    c.deposit_deadline === "stated" ||
+    offer.key_dates?.some(
+      (k) => k.type === "deposit_deadline" && !!k.date,
+    ) ||
+    false;
+  const hasAcceptDeadline =
+    c.accept_deadline === "stated" ||
+    offer.key_dates?.some(
+      (k) => k.type === "accept_deadline" && !!k.date,
+    ) ||
+    false;
+  if (depositRequired && !hasDepositDeadline && !hasAcceptDeadline) {
     gaps.push("留位费截止日期未在 offer 中明确。");
   }
 
-  if (c.term_start === "absent") {
+  const hasTermStart =
+    offer.key_dates?.some((k) => k.type === "term_start" && !!k.date) ||
+    !!offer.term_start_text?.trim();
+  if (c.term_start === "absent" && !hasTermStart) {
     gaps.push("入学时间未在 offer 中明确。");
   }
 
-  if (c.duration === "absent") {
+  if (c.duration === "absent" && !offer.duration?.trim()) {
     gaps.push("项目时长未在 offer 中明确。");
   }
 
-  if (c.accept_deadline === "absent") {
+  if (c.accept_deadline === "absent" && !hasAcceptDeadline) {
     gaps.push("接受 offer 截止日期未在 offer 中明确。");
   }
 
