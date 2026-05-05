@@ -49,7 +49,13 @@ export default function App() {
     const apiKey = s.apiKeys?.[provider] ?? s.apiKey;
     if (!apiKey) {
       setSettingsOpen(true);
-      throw new Error("请先在设置中填入 API Key");
+      const label =
+        provider === "google"
+          ? "Google AI Studio"
+          : provider === "zhipu"
+            ? "智谱 BigModel"
+            : "OpenRouter";
+      throw new Error(`当前服务商是 ${label}，请在设置中填入它的 API Key`);
     }
     return { apiKey, provider, model: s.model };
   }, []);
