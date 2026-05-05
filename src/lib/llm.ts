@@ -981,12 +981,26 @@ export function pruneInfoGaps(offer: ExtractedOffer): string[] {
   );
   const hasDuration = !!offer.duration?.trim();
   const t = offer.fees?.tuition;
-  const hasCompleteTuition = !!t && t.is_partial !== true;
+  // Any non-zero tuition value counts. The summary already explains the
+  // nuance (annual vs total, estimate, etc.); info_gaps shouldn't double-up.
+  const hasAnyTuition = !!t && t.amount > 0;
+  // Did the offer itself say "no deposit required" / "no caution money"?
+  // We look at summary + notes since there's no structured "deposit_required:false" field.
+  const summaryBlob = [
+    offer.summary ?? "",
+    ...(offer.notes ?? []),
+  ]
+    .join("\n")
+    .toLowerCase();
+  const explicitNoDeposit =
+    /无需.*?(留位|deposit|caution)/i.test(summaryBlob) ||
+    /(no|不需要|不收|免)\s*(deposit|caution|留位)/i.test(summaryBlob) ||
+    /留位费.*?(无|没有|不需|免)/i.test(summaryBlob);
 
   return gaps.filter((g) => {
     const s = g.toLowerCase();
     if (
-      hasDepositDeadline &&
+      (hasDepositDeadline || explicitNoDeposit) &&
       (/留位费.*截止|deposit.*deadline|caution.*due/i.test(g) ||
         s.includes("留位"))
     )
@@ -998,7 +1012,7 @@ export function pruneInfoGaps(offer: ExtractedOffer): string[] {
       return false;
     if (hasDuration && /(学制|时长|duration|学分.*总)/i.test(g)) return false;
     if (
-      hasCompleteTuition &&
+      hasAnyTuition &&
       /(学费|tuition)/i.test(g) &&
       /(总|完整|全部|整个|项目|未找到|未明确|首期|不完整)/i.test(g)
     )
