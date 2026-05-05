@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeInfoGaps } from "./llm";
+import { computeInfoGaps, inheritDepositDeadline } from "./llm";
 import type { Coverage, ExtractedOffer } from "./schema";
 
 /**
@@ -177,6 +177,65 @@ describe("computeInfoGaps — coverage-driven (v10+)", () => {
       coverage: { ...baseCoverage, tuition: "absent" },
     });
     expect(computeInfoGaps(offer)).toEqual([]);
+  });
+});
+
+describe("inheritDepositDeadline", () => {
+  it("deposit task with no deadline inherits accept_deadline", () => {
+    const offer: ExtractedOffer = {
+      school: "Imperial",
+      program: "MSc",
+      key_dates: [
+        { type: "accept_deadline", date: "2022-12-24", label: "接受截止" },
+      ],
+      must_do: [
+        {
+          action: "缴纳 £3860 留位费（学费的 10%）",
+          priority: "high",
+        },
+      ],
+    };
+    inheritDepositDeadline(offer);
+    expect(offer.must_do![0].deadline).toBe("2022-12-24");
+  });
+
+  it("deposit task that already has its own deadline is left alone", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "Test",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+      must_do: [
+        { action: "缴纳留位费", deadline: "2024-03-15", priority: "high" },
+      ],
+    };
+    inheritDepositDeadline(offer);
+    expect(offer.must_do![0].deadline).toBe("2024-03-15");
+  });
+
+  it("non-deposit task is left alone even if no deadline", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "Test",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+      must_do: [{ action: "上传成绩单", priority: "medium" }],
+    };
+    inheritDepositDeadline(offer);
+    expect(offer.must_do![0].deadline).toBeUndefined();
+  });
+
+  it("no accept_deadline → no inheritance", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "Test",
+      key_dates: [],
+      must_do: [{ action: "缴纳留位费", priority: "high" }],
+    };
+    inheritDepositDeadline(offer);
+    expect(offer.must_do![0].deadline).toBeUndefined();
   });
 });
 

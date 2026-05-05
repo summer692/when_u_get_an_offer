@@ -981,8 +981,32 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     researched_fields: [],
     coverage: normalizeCoverage(r?.coverage),
   };
+  inheritDepositDeadline(out);
   out.info_gaps = computeInfoGaps(out);
   return out;
+}
+
+/**
+ * If a must_do item is about paying the deposit and has no deadline of
+ * its own, but the offer states an acceptance deadline, propagate it.
+ * Many offers bundle the two ("pay deposit by acceptance deadline to
+ * confirm"); the LLM often forgets to set must_do[].deadline in that
+ * case, leaving the user staring at a deadline-less todo.
+ */
+export function inheritDepositDeadline(offer: ExtractedOffer): void {
+  if (!Array.isArray(offer.must_do) || offer.must_do.length === 0) return;
+  const acceptDate = offer.key_dates?.find(
+    (k) => k.type === "accept_deadline" && !!k.date,
+  )?.date;
+  if (!acceptDate) return;
+  for (const m of offer.must_do) {
+    const text = `${m.action ?? ""} ${m.details ?? ""}`.toLowerCase();
+    const isDepositTask =
+      /留位|deposit|caution|押金|入学保证金|预交学费|确认费/i.test(text);
+    if (isDepositTask && !m.deadline) {
+      m.deadline = acceptDate;
+    }
+  }
 }
 
 /**
