@@ -518,14 +518,7 @@ fees.deposit 的语义（沿用之前规则）：
 - 只有在 offer 上的学费数字是"首期 / 单学期 / 单学分 / 一部分付款"，并且**也无法从 offer 自身算出总额**时，才把它放到 tuition 并设 is_partial = true。
 - 在 tuition.note 中用中文解释为什么是首期，例如 "首期 12 学分 × HK$8,500，全程总学费需查官网"。
 
-info_gaps（生成前必须做自检）：
-- 在写 info_gaps 之前，请先查看你**已经填入**的字段。一条 gap 只有当对应字段为 null 或为不完整时才能加。**绝不能为一个你已经填了具体值的字段加"未找到"。**
-- 触发条件（任意命中且对应字段确实没填好才加）：
-  - fees.tuition 为 null 或 is_partial 仍为 true → "学费仅显示首期，请到 [学校] 官网查询全程总学费"
-  - duration 为 null → "未找到项目时长"
-  - **term_start_text 也为 null 且 key_dates 中无任何 type="term_start"** → "未找到具体入学时间"（注意：只要 term_start_text 写了"2026/27 学年第一学期"这类描述，就**不要**加这条 gap）
-  - offer 提到 caution / deposit / 留位费但 key_dates 中**没有任何** type="deposit_deadline" 的条目 → "未找到留位费截止日期"
-- 字段已抽取就**不要**报告这条 gap。
+info_gaps：直接返回 `[]`。后端会从结构化字段反推"需要核实"列表，你不需要也不应该自己填这个数组。
 
 key_dates 与 must_do：
 - 留位费截止 → key_dates 加一条 type="deposit_deadline"；同时 must_do 加一条 priority="high"，action 写明金额（如有），如 "缴纳留位费 HK$102,400 以确认录取"。
@@ -587,7 +580,7 @@ export interface ExtractOptions {
  * a new prompt immediately without manually clearing storage. Bump whenever
  * SYSTEM_PROMPT changes in a way that would yield a meaningfully different
  * output (new field, stricter rules, etc.). */
-export const PROMPT_VERSION = "v8-verified-source";
+export const PROMPT_VERSION = "v9-derived-gaps";
 
 /** Build the L2 (extraction) cache key. Includes the provider + model so
  * different LLM combos don't share — picking a different provider should
@@ -971,55 +964,67 @@ export function programIsComplete(offer: ExtractedOffer): boolean {
  * Drop info_gaps entries that contradict fields the LLM actually filled in.
  * Defense against the model emitting both "未找到 X" and a populated X field.
  */
-export function pruneInfoGaps(offer: ExtractedOffer): string[] {
-  const gaps = offer.info_gaps ?? [];
-  const hasTermStart =
-    offer.key_dates?.some((k) => k.type === "term_start" && !!k.date) ||
-    !!offer.term_start_text?.trim();
-  const hasDepositDeadline = offer.key_dates?.some(
-    (k) => k.type === "deposit_deadline" && !!k.date,
-  );
-  const hasDuration = !!offer.duration?.trim();
-  const t = offer.fees?.tuition;
-  // Any non-zero tuition value counts. The summary already explains the
-  // nuance (annual vs total, estimate, etc.); info_gaps shouldn't double-up.
-  const hasAnyTuition = !!t && t.amount > 0;
-  // Did the offer itself say "no deposit required" / "no caution money"?
-  // We look at summary + notes since there's no structured "deposit_required:false" field.
-  const summaryBlob = [
-    offer.summary ?? "",
-    ...(offer.notes ?? []),
-  ]
+/**
+ * Derive the "需要核实" list from the structured fields, IGNORING anything
+ * the LLM put in info_gaps. The LLM is asked to fill in info_gaps for legacy
+ * compatibility, but we don't trust that output — it routinely contradicts
+ * the same fields it just filled. Computing gaps from the JSON is the only
+ * way to guarantee summary / cards / 需要核实 stay consistent with each other.
+ */
+export function computeInfoGaps(offer: ExtractedOffer): string[] {
+  const gaps: string[] = [];
+  const summaryBlob = [offer.summary ?? "", ...(offer.notes ?? [])]
     .join("\n")
     .toLowerCase();
+
+  const t = offer.fees?.tuition;
+  const hasTuition = !!t && t.amount > 0;
+  if (!hasTuition) {
+    gaps.push("学费未在 offer 中明确，请到学校官网核对。");
+  }
+
+  // Did the offer affirmatively say "no deposit"? Then it's not a gap.
   const explicitNoDeposit =
     /无需.*?(留位|deposit|caution)/i.test(summaryBlob) ||
     /(no|不需要|不收|免)\s*(deposit|caution|留位)/i.test(summaryBlob) ||
     /留位费.*?(无|没有|不需|免)/i.test(summaryBlob);
+  const d = offer.fees?.deposit;
+  const hasDeposit = !!d && d.amount > 0;
+  if (!hasDeposit && !explicitNoDeposit) {
+    gaps.push("留位费金额未在 offer 中明确。");
+  }
+  if (hasDeposit) {
+    const hasDepositDeadline = offer.key_dates?.some(
+      (k) => k.type === "deposit_deadline" && !!k.date,
+    );
+    if (!hasDepositDeadline) {
+      gaps.push("留位费截止日期未在 offer 中明确。");
+    }
+  }
 
-  return gaps.filter((g) => {
-    const s = g.toLowerCase();
-    if (
-      (hasDepositDeadline || explicitNoDeposit) &&
-      (/留位费.*截止|deposit.*deadline|caution.*due/i.test(g) ||
-        s.includes("留位"))
-    )
-      return false;
-    if (
-      hasTermStart &&
-      /(开学|入学日期|入学时间|term[\s-]?start)/i.test(g)
-    )
-      return false;
-    if (hasDuration && /(学制|时长|duration|学分.*总)/i.test(g)) return false;
-    if (
-      hasAnyTuition &&
-      /(学费|tuition)/i.test(g) &&
-      /(总|完整|全部|整个|项目|未找到|未明确|首期|不完整)/i.test(g)
-    )
-      return false;
-    return true;
-  });
+  const hasTermStart =
+    offer.key_dates?.some((k) => k.type === "term_start" && !!k.date) ||
+    !!offer.term_start_text?.trim();
+  if (!hasTermStart) {
+    gaps.push("入学时间未在 offer 中明确。");
+  }
+
+  if (!offer.duration?.trim()) {
+    gaps.push("项目时长未在 offer 中明确。");
+  }
+
+  const hasAcceptDeadline = offer.key_dates?.some(
+    (k) => k.type === "accept_deadline" && !!k.date,
+  );
+  if (!hasAcceptDeadline) {
+    gaps.push("接受 offer 截止日期未在 offer 中明确。");
+  }
+
+  return gaps;
 }
+
+/** @deprecated Use computeInfoGaps. Kept as alias to avoid churn. */
+export const pruneInfoGaps = computeInfoGaps;
 
 /**
  * Use Gemini's native googleSearch tool to look up missing tuition / duration
