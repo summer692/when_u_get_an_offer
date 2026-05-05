@@ -988,17 +988,24 @@ export function computeInfoGaps(offer: ExtractedOffer): string[] {
     /无需.*?(留位|deposit|caution)/i.test(summaryBlob) ||
     /(no|不需要|不收|免)\s*(deposit|caution|留位)/i.test(summaryBlob) ||
     /留位费.*?(无|没有|不需|免)/i.test(summaryBlob);
+  // Only flag deposit-related gaps when the offer actually brought up
+  // the topic. Plenty of offers don't require a deposit at all — those
+  // shouldn't trigger "留位费金额未明确" / "留位费截止日期未明确" warnings.
+  const mentionsDeposit =
+    /留位|deposit|caution|押金|入学保证金|预交学费|确认费/i.test(summaryBlob);
   const d = offer.fees?.deposit;
   const hasDeposit = !!d && d.amount > 0;
-  if (!hasDeposit && !explicitNoDeposit) {
-    gaps.push("留位费金额未在 offer 中明确。");
-  }
-  if (hasDeposit) {
-    const hasDepositDeadline = offer.key_dates?.some(
-      (k) => k.type === "deposit_deadline" && !!k.date,
-    );
-    if (!hasDepositDeadline) {
-      gaps.push("留位费截止日期未在 offer 中明确。");
+  if (mentionsDeposit) {
+    if (!hasDeposit && !explicitNoDeposit) {
+      gaps.push("留位费金额未在 offer 中明确。");
+    }
+    if (hasDeposit) {
+      const hasDepositDeadline = offer.key_dates?.some(
+        (k) => k.type === "deposit_deadline" && !!k.date,
+      );
+      if (!hasDepositDeadline) {
+        gaps.push("留位费截止日期未在 offer 中明确。");
+      }
     }
   }
 
