@@ -1,5 +1,11 @@
 import { jsonrepair } from "jsonrepair";
-import type { ExtractedOffer, Condition, MustDo, Provider } from "./schema";
+import type {
+  Coverage,
+  ExtractedOffer,
+  Condition,
+  MustDo,
+  Provider,
+} from "./schema";
 import { stripMarkdown } from "./format";
 import { recordExtractionLog } from "./debugLog";
 import type { ParsedInput } from "./parsers";
@@ -173,7 +179,15 @@ Schema:
   ],
   "raw_highlights": [ string ],             // 原文中最关键的 1-5 句摘录
   "notes": [ string ],                      // 重要备注（材料真实性、不退费、签证自办、Concurrent Registration 等），每条一句中文
-  "info_gaps": [ string ],                  // 缺失或需要核实的关键信息（中文，简短）
+  "info_gaps": [ string ],                  // 直接返回 []，由后端根据 coverage 反推
+  "coverage": {                             // 必填：offer 原文对每个主题说了什么
+    "tuition":          "stated_full" | "stated_partial" | "stated_estimate" | "absent",
+    "deposit":          "required_with_amount" | "required_no_amount" | "explicitly_none" | "absent",
+    "deposit_deadline": "stated" | "absent",
+    "term_start":       "stated_date" | "stated_term_only" | "absent",
+    "duration":         "stated" | "absent",
+    "accept_deadline":  "stated" | "absent"
+  },
   "summary": string                         // 250-350 字中文叙事（详见下方"叙事解读"段落）
 }
 
@@ -518,7 +532,35 @@ fees.deposit 的语义（沿用之前规则）：
 - 只有在 offer 上的学费数字是"首期 / 单学期 / 单学分 / 一部分付款"，并且**也无法从 offer 自身算出总额**时，才把它放到 tuition 并设 is_partial = true。
 - 在 tuition.note 中用中文解释为什么是首期，例如 "首期 12 学分 × HK$8,500，全程总学费需查官网"。
 
-info_gaps：直接返回空数组 \`[]\`。后端会从结构化字段反推"需要核实"列表，你不需要也不应该自己填这个数组。
+info_gaps：直接返回空数组 \`[]\`。后端会从 coverage 反推"需要核实"列表，你不需要也不应该自己填这个数组。
+
+coverage（必填，每个 key 都必须有值；这是后端生成"需要核实"列表的唯一依据）：
+- 不是描述"你抽出了什么"，而是描述"offer 原文里有没有提到这个主题"。
+- 哪怕你某个字段没填好，coverage 也要诚实反映原文情况。例：offer 写了"Tuition: USD 50,000/year, estimate"，你 fees.tuition 没填出来，但 coverage.tuition = "stated_estimate"。
+- 各取值的判断规则（按"原文有没有写"来判，不是按"你抽没抽到"来判）：
+  - tuition:
+    - "stated_full" → offer 直接给出项目总学费数字（"Programme Fee: USD 80,000 in total"）
+    - "stated_partial" → offer 只给首期 / 单学期 / 单学分 / 一部分付款金额，没给总额
+    - "stated_estimate" → offer 给了数字但**自己说**是 "estimate" / "预估" / "annual estimate" / "subject to change"
+    - "absent" → offer 一个学费数字都没给
+  - deposit:
+    - "required_with_amount" → offer 写了要交留位费 / deposit / caution money 且给出**具体金额**
+    - "required_no_amount" → offer 说要交留位费但**没**写金额（极少见）
+    - "explicitly_none" → offer **明确**写"no deposit required" / "无需留位费" / "no caution money required" 之类
+    - "absent" → offer 完全没提 deposit / 留位费 / caution money（很多 offer 都是这种）
+  - deposit_deadline:
+    - "stated" → offer 写了留位费截止日期（具体日期 or 相对时间如 "within 4 weeks"）
+    - "absent" → 没写。**注意：deposit 为 "absent" / "explicitly_none" 时 deposit_deadline 必然是 "absent"。**
+  - term_start:
+    - "stated_date" → offer 给了具体开学日（"6 September 2026" / "2026-09-06"）
+    - "stated_term_only" → offer 只给学年/学期粒度（"2026/27 学年第一学期" / "2026 年秋季"）
+    - "absent" → 完全没提
+  - duration:
+    - "stated" → offer 写了项目时长（"1.5 年" / "2 years" / "30 credits over 1 year"）
+    - "absent" → 完全没写时长信息（"全日制"不算时长，是学习方式）
+  - accept_deadline:
+    - "stated" → offer 写了接受 offer 的截止日期（具体日期 or 相对时间如 "within 28 days"）
+    - "absent" → 完全没写
 
 key_dates 与 must_do：
 - 留位费截止 → key_dates 加一条 type="deposit_deadline"；同时 must_do 加一条 priority="high"，action 写明金额（如有），如 "缴纳留位费 HK$102,400 以确认录取"。
@@ -580,7 +622,7 @@ export interface ExtractOptions {
  * a new prompt immediately without manually clearing storage. Bump whenever
  * SYSTEM_PROMPT changes in a way that would yield a meaningfully different
  * output (new field, stricter rules, etc.). */
-export const PROMPT_VERSION = "v9-derived-gaps";
+export const PROMPT_VERSION = "v10-coverage-map";
 
 /** Build the L2 (extraction) cache key. Includes the provider + model so
  * different LLM combos don't share — picking a different provider should
@@ -937,9 +979,48 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     // Fresh extractions always start with no researched fields — only
     // applyResearch promotes a field into this set later.
     researched_fields: [],
+    coverage: normalizeCoverage(r?.coverage),
   };
-  out.info_gaps = pruneInfoGaps(out);
+  out.info_gaps = computeInfoGaps(out);
   return out;
+}
+
+/**
+ * Coerce LLM-output coverage into a valid Coverage object. Missing or
+ * out-of-enum values fall back to "absent" so downstream gap computation
+ * remains conservative (we'd rather say "unknown → flag" than silently drop).
+ */
+function normalizeCoverage(c: unknown): Coverage | undefined {
+  if (!c || typeof c !== "object") return undefined;
+  const x = c as Record<string, unknown>;
+  const pick = <T extends string>(key: string, allowed: readonly T[]): T => {
+    const v = x[key];
+    return typeof v === "string" && (allowed as readonly string[]).includes(v)
+      ? (v as T)
+      : ("absent" as T);
+  };
+  return {
+    tuition: pick("tuition", [
+      "stated_full",
+      "stated_partial",
+      "stated_estimate",
+      "absent",
+    ] as const),
+    deposit: pick("deposit", [
+      "required_with_amount",
+      "required_no_amount",
+      "explicitly_none",
+      "absent",
+    ] as const),
+    deposit_deadline: pick("deposit_deadline", ["stated", "absent"] as const),
+    term_start: pick("term_start", [
+      "stated_date",
+      "stated_term_only",
+      "absent",
+    ] as const),
+    duration: pick("duration", ["stated", "absent"] as const),
+    accept_deadline: pick("accept_deadline", ["stated", "absent"] as const),
+  };
 }
 
 /**
@@ -972,6 +1053,47 @@ export function programIsComplete(offer: ExtractedOffer): boolean {
  * way to guarantee summary / cards / 需要核实 stay consistent with each other.
  */
 export function computeInfoGaps(offer: ExtractedOffer): string[] {
+  // Preferred path: drive everything from coverage when present.
+  if (offer.coverage) return computeInfoGapsFromCoverage(offer);
+  // Legacy path for offers extracted before v9 — heuristic detection.
+  return computeInfoGapsHeuristic(offer);
+}
+
+function computeInfoGapsFromCoverage(offer: ExtractedOffer): string[] {
+  const c = offer.coverage!;
+  const gaps: string[] = [];
+
+  if (c.tuition === "absent") {
+    gaps.push("学费未在 offer 中明确，请到学校官网核对。");
+  }
+
+  if (c.deposit === "required_no_amount") {
+    gaps.push("留位费金额未在 offer 中明确。");
+  }
+  if (
+    (c.deposit === "required_with_amount" ||
+      c.deposit === "required_no_amount") &&
+    c.deposit_deadline === "absent"
+  ) {
+    gaps.push("留位费截止日期未在 offer 中明确。");
+  }
+
+  if (c.term_start === "absent") {
+    gaps.push("入学时间未在 offer 中明确。");
+  }
+
+  if (c.duration === "absent") {
+    gaps.push("项目时长未在 offer 中明确。");
+  }
+
+  if (c.accept_deadline === "absent") {
+    gaps.push("接受 offer 截止日期未在 offer 中明确。");
+  }
+
+  return gaps;
+}
+
+function computeInfoGapsHeuristic(offer: ExtractedOffer): string[] {
   const gaps: string[] = [];
   const summaryBlob = [offer.summary ?? "", ...(offer.notes ?? [])]
     .join("\n")
@@ -983,14 +1105,10 @@ export function computeInfoGaps(offer: ExtractedOffer): string[] {
     gaps.push("学费未在 offer 中明确，请到学校官网核对。");
   }
 
-  // Did the offer affirmatively say "no deposit"? Then it's not a gap.
   const explicitNoDeposit =
     /无需.*?(留位|deposit|caution)/i.test(summaryBlob) ||
     /(no|不需要|不收|免)\s*(deposit|caution|留位)/i.test(summaryBlob) ||
     /留位费.*?(无|没有|不需|免)/i.test(summaryBlob);
-  // Only flag deposit-related gaps when the offer actually brought up
-  // the topic. Plenty of offers don't require a deposit at all — those
-  // shouldn't trigger "留位费金额未明确" / "留位费截止日期未明确" warnings.
   const mentionsDeposit =
     /留位|deposit|caution|押金|入学保证金|预交学费|确认费/i.test(summaryBlob);
   const d = offer.fees?.deposit;
