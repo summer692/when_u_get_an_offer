@@ -518,7 +518,7 @@ fees.deposit 的语义（沿用之前规则）：
 - 只有在 offer 上的学费数字是"首期 / 单学期 / 单学分 / 一部分付款"，并且**也无法从 offer 自身算出总额**时，才把它放到 tuition 并设 is_partial = true。
 - 在 tuition.note 中用中文解释为什么是首期，例如 "首期 12 学分 × HK$8,500，全程总学费需查官网"。
 
-info_gaps：直接返回 `[]`。后端会从结构化字段反推"需要核实"列表，你不需要也不应该自己填这个数组。
+info_gaps：直接返回空数组 \`[]\`。后端会从结构化字段反推"需要核实"列表，你不需要也不应该自己填这个数组。
 
 key_dates 与 must_do：
 - 留位费截止 → key_dates 加一条 type="deposit_deadline"；同时 must_do 加一条 priority="high"，action 写明金额（如有），如 "缴纳留位费 HK$102,400 以确认录取"。
