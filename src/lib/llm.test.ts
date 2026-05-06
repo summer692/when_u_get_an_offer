@@ -256,6 +256,17 @@ describe("applySchoolNameOverride", () => {
     expect(offer.school_zh).toBe("帝国理工学院");
   });
 
+  it("UCL — verifies the easily-confused pair stays distinct", () => {
+    const offer: ExtractedOffer = {
+      school: "UCL (University College London)",
+      school_zh: "??",
+      program: "MSc",
+      key_dates: [],
+    };
+    applySchoolNameOverride(offer);
+    expect(offer.school_zh).toBe("伦敦大学学院");
+  });
+
   it("school not in lookup → leaves school_zh alone", () => {
     const offer: ExtractedOffer = {
       school: "Some Niche University",
@@ -276,6 +287,62 @@ describe("applySchoolNameOverride", () => {
     };
     applySchoolNameOverride(offer);
     expect(offer.school_zh).toBe("帝国理工学院");
+  });
+
+  it("strips parenthetical abbreviation suffix — MIT both with and without (MIT)", () => {
+    const a: ExtractedOffer = {
+      school: "Massachusetts Institute of Technology (MIT)",
+      program: "MSc",
+      key_dates: [],
+    };
+    const b: ExtractedOffer = {
+      school: "Massachusetts Institute of Technology",
+      program: "MSc",
+      key_dates: [],
+    };
+    applySchoolNameOverride(a);
+    applySchoolNameOverride(b);
+    expect(a.school_zh).toBe("麻省理工学院");
+    expect(b.school_zh).toBe("麻省理工学院");
+  });
+
+  it("strips a leading 'The' so 'The University of Hong Kong' hits the same entry as 'University of Hong Kong'", () => {
+    const a: ExtractedOffer = {
+      school: "The University of Hong Kong",
+      program: "MSc",
+      key_dates: [],
+    };
+    const b: ExtractedOffer = {
+      school: "University of Hong Kong",
+      program: "MSc",
+      key_dates: [],
+    };
+    applySchoolNameOverride(a);
+    applySchoolNameOverride(b);
+    expect(a.school_zh).toBe("香港大学");
+    expect(b.school_zh).toBe("香港大学");
+  });
+
+  it("Hong Kong universities — three distinct entries are all wired up", () => {
+    const cases: Array<[string, string]> = [
+      ["The University of Hong Kong", "香港大学"],
+      ["The Chinese University of Hong Kong", "香港中文大学"],
+      [
+        "The Hong Kong University of Science and Technology",
+        "香港科技大学（HKUST）",
+      ],
+      ["The Hong Kong Polytechnic University", "香港理工大学"],
+      ["City University of Hong Kong", "香港城市大学"],
+    ];
+    for (const [en, zh] of cases) {
+      const offer: ExtractedOffer = {
+        school: en,
+        program: "MSc",
+        key_dates: [],
+      };
+      applySchoolNameOverride(offer);
+      expect(offer.school_zh, en).toBe(zh);
+    }
   });
 });
 
