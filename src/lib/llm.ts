@@ -9,6 +9,7 @@ import type {
 import { stripMarkdown } from "./format";
 import { recordExtractionLog } from "./debugLog";
 import type { ParsedInput } from "./parsers";
+import { lookupSchoolZh } from "./schoolNames";
 
 interface ProviderConfig {
   endpoint: string;
@@ -982,8 +983,66 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     coverage: normalizeCoverage(r?.coverage),
   };
   inheritDepositDeadline(out);
+  applySchoolNameOverride(out);
+  inferDepositFromTuitionPercent(out);
   out.info_gaps = computeInfoGaps(out);
   return out;
+}
+
+/**
+ * Override school_zh when the English school name has a known canonical
+ * Chinese mapping. Defends against the LLM (especially small models like
+ * GLM-4.6V-Flash) confusing similar-sounding English names — e.g.
+ * Imperial College London being labelled 伦敦大学学院 (UCL's name).
+ */
+export function applySchoolNameOverride(offer: ExtractedOffer): void {
+  const canonical = lookupSchoolZh(offer.school);
+  if (canonical && offer.school_zh !== canonical) {
+    offer.school_zh = canonical;
+  }
+}
+
+/**
+ * When the offer states the deposit as a percentage of tuition (very
+ * common UK pattern: "10% of your first year tuition fees") but the
+ * extractor didn't fill fees.deposit.amount, compute it from the known
+ * tuition.amount. Marks the result as estimate so the trust label
+ * shows it's derived, not directly read.
+ */
+export function inferDepositFromTuitionPercent(offer: ExtractedOffer): void {
+  // Already have a deposit amount → don't override.
+  if (offer.fees?.deposit && offer.fees.deposit.amount > 0) return;
+  const tuition = offer.fees?.tuition;
+  if (!tuition || !(tuition.amount > 0)) return;
+
+  // Search every text field where the percent might be stated.
+  const blob = [
+    offer.summary ?? "",
+    ...(offer.notes ?? []),
+    ...(offer.raw_highlights ?? []),
+    ...(offer.conditions ?? []).flatMap((c) => [c.item ?? "", c.details ?? ""]),
+    ...(offer.must_do ?? []).flatMap((m) => [m.action ?? "", m.details ?? ""]),
+  ].join("\n");
+
+  // A percent paired with a deposit-related keyword in the same sentence.
+  const sentences = blob.split(/[。\n.;]/);
+  for (const s of sentences) {
+    if (!/留位|deposit|caution|押金|入学保证金|预交学费|确认费/i.test(s))
+      continue;
+    const m = s.match(/(\d+(?:\.\d+)?)\s*%/);
+    if (!m) continue;
+    const pct = parseFloat(m[1]);
+    if (!(pct > 0) || pct > 50) continue; // sanity guard
+    const computed = Math.round((tuition.amount * pct) / 100);
+    offer.fees = offer.fees ?? {};
+    offer.fees.deposit = {
+      amount: computed,
+      currency: tuition.currency,
+      note: `按 offer 中"学费的 ${pct}%"自动推算`,
+      is_estimate: true,
+    };
+    return;
+  }
 }
 
 /**

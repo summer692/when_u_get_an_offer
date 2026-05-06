@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeInfoGaps, inheritDepositDeadline } from "./llm";
+import {
+  applySchoolNameOverride,
+  computeInfoGaps,
+  inferDepositFromTuitionPercent,
+  inheritDepositDeadline,
+} from "./llm";
 import type { Coverage, ExtractedOffer } from "./schema";
 
 /**
@@ -236,6 +241,114 @@ describe("inheritDepositDeadline", () => {
     };
     inheritDepositDeadline(offer);
     expect(offer.must_do![0].deadline).toBeUndefined();
+  });
+});
+
+describe("applySchoolNameOverride", () => {
+  it("Imperial → 帝国理工学院 (real 智谱 misclassification)", () => {
+    const offer: ExtractedOffer = {
+      school: "Imperial College London",
+      school_zh: "伦敦大学学院",
+      program: "MSc",
+      key_dates: [],
+    };
+    applySchoolNameOverride(offer);
+    expect(offer.school_zh).toBe("帝国理工学院");
+  });
+
+  it("school not in lookup → leaves school_zh alone", () => {
+    const offer: ExtractedOffer = {
+      school: "Some Niche University",
+      school_zh: "某冷门大学",
+      program: "MSc",
+      key_dates: [],
+    };
+    applySchoolNameOverride(offer);
+    expect(offer.school_zh).toBe("某冷门大学");
+  });
+
+  it("case + whitespace insensitive lookup", () => {
+    const offer: ExtractedOffer = {
+      school: "  IMPERIAL  College   London ",
+      school_zh: "伦敦大学学院",
+      program: "MSc",
+      key_dates: [],
+    };
+    applySchoolNameOverride(offer);
+    expect(offer.school_zh).toBe("帝国理工学院");
+  });
+});
+
+describe("inferDepositFromTuitionPercent", () => {
+  it("Imperial 10% case: computes deposit from tuition", () => {
+    const offer: ExtractedOffer = {
+      school: "Imperial College London",
+      program: "MSc",
+      key_dates: [],
+      fees: {
+        tuition: { amount: 38600, currency: "GBP" },
+      },
+      conditions: [
+        {
+          item: "支付学费的 10% 留位费",
+          status: "required",
+        },
+      ],
+    };
+    inferDepositFromTuitionPercent(offer);
+    expect(offer.fees?.deposit?.amount).toBe(3860);
+    expect(offer.fees?.deposit?.currency).toBe("GBP");
+    expect(offer.fees?.deposit?.is_estimate).toBe(true);
+  });
+
+  it("deposit already extracted → no-op", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      fees: {
+        tuition: { amount: 38600, currency: "GBP" },
+        deposit: { amount: 5000, currency: "GBP" },
+      },
+      conditions: [{ item: "10% deposit", status: "required" }],
+    };
+    inferDepositFromTuitionPercent(offer);
+    expect(offer.fees?.deposit?.amount).toBe(5000);
+  });
+
+  it("no tuition known → no-op", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      conditions: [{ item: "10% deposit of tuition", status: "required" }],
+    };
+    inferDepositFromTuitionPercent(offer);
+    expect(offer.fees?.deposit).toBeUndefined();
+  });
+
+  it("percent unrelated to deposit (e.g. scholarship %) → no-op", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      fees: { tuition: { amount: 50000, currency: "USD" } },
+      notes: ["学费减免 20%"],
+    };
+    inferDepositFromTuitionPercent(offer);
+    expect(offer.fees?.deposit).toBeUndefined();
+  });
+
+  it("English deposit phrasing", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      fees: { tuition: { amount: 50000, currency: "USD" } },
+      raw_highlights: ["10% deposit of your annual tuition is required"],
+    };
+    inferDepositFromTuitionPercent(offer);
+    expect(offer.fees?.deposit?.amount).toBe(5000);
   });
 });
 
