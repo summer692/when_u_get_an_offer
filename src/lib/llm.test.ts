@@ -323,6 +323,35 @@ describe("applySchoolNameOverride", () => {
     expect(b.school_zh).toBe("香港大学");
   });
 
+  it("when school_zh is overridden, the wrong name is also replaced in prose fields", () => {
+    // Real-world Imperial offer: 智谱 puts the wrong 伦敦大学学院 into school_zh
+    // AND threads it through summary + notes + raw_highlights. After
+    // override, every mention should be the canonical 帝国理工学院.
+    const offer: ExtractedOffer = {
+      school: "Imperial College London",
+      school_zh: "伦敦大学学院",
+      program: "MSc",
+      key_dates: [],
+      summary:
+        "恭喜你获得伦敦大学学院（Imperial College London）的录取！伦敦大学学院在材料科学领域排名靠前。",
+      notes: ["伦敦大学学院的录取条件如下"],
+      raw_highlights: ["恭喜获得伦敦大学学院 MSc 录取"],
+      conditions: [
+        {
+          item: "提交伦敦大学学院要求的成绩单",
+          status: "required",
+        },
+      ],
+    };
+    applySchoolNameOverride(offer);
+    expect(offer.school_zh).toBe("帝国理工学院");
+    expect(offer.summary).not.toContain("伦敦大学学院");
+    expect(offer.summary).toContain("帝国理工学院");
+    expect(offer.notes![0]).toBe("帝国理工学院的录取条件如下");
+    expect(offer.raw_highlights![0]).toBe("恭喜获得帝国理工学院 MSc 录取");
+    expect(offer.conditions![0].item).toBe("提交帝国理工学院要求的成绩单");
+  });
+
   it("Hong Kong universities — three distinct entries are all wired up", () => {
     const cases: Array<[string, string]> = [
       ["The University of Hong Kong", "香港大学"],

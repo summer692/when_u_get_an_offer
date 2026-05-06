@@ -994,11 +994,45 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
  * Chinese mapping. Defends against the LLM (especially small models like
  * GLM-4.6V-Flash) confusing similar-sounding English names — e.g.
  * Imperial College London being labelled 伦敦大学学院 (UCL's name).
+ *
+ * When we override, also rewrite the LLM's wrong Chinese name everywhere
+ * else it appears (summary, notes, raw_highlights, conditions, must_do)
+ * so the prose narrative stays consistent with the cards.
  */
 export function applySchoolNameOverride(offer: ExtractedOffer): void {
   const canonical = lookupSchoolZh(offer.school);
-  if (canonical && offer.school_zh !== canonical) {
-    offer.school_zh = canonical;
+  if (!canonical) return;
+  const previous = offer.school_zh;
+  if (previous === canonical) return;
+  offer.school_zh = canonical;
+  if (!previous || !previous.trim()) return;
+
+  // The LLM very likely sprinkled the wrong Chinese name through prose
+  // fields too. Replace it. Use a literal (not regex) replace_all so
+  // punctuation in the wrong name doesn't get misinterpreted.
+  const replace = (s: string | undefined) =>
+    s ? s.split(previous).join(canonical) : s;
+
+  if (offer.summary) offer.summary = replace(offer.summary);
+  if (Array.isArray(offer.notes)) {
+    offer.notes = offer.notes.map((n) => replace(n)!).filter(Boolean);
+  }
+  if (Array.isArray(offer.raw_highlights)) {
+    offer.raw_highlights = offer.raw_highlights
+      .map((n) => replace(n)!)
+      .filter(Boolean);
+  }
+  if (Array.isArray(offer.conditions)) {
+    for (const c of offer.conditions) {
+      if (c.item) c.item = replace(c.item)!;
+      if (c.details) c.details = replace(c.details);
+    }
+  }
+  if (Array.isArray(offer.must_do)) {
+    for (const m of offer.must_do) {
+      if (m.action) m.action = replace(m.action)!;
+      if (m.details) m.details = replace(m.details);
+    }
   }
 }
 
