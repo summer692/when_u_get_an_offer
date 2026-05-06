@@ -5,66 +5,55 @@
 - ❌ 不要写 `**加粗**` / `__加粗__` / `*斜体*` / `_斜体_`
 - ❌ 不要在字符串里写 `# 标题` / `## 标题`
 - ❌ 不要在字符串里加 `- 列表` / `1. 编号`（数据本来就是数组，每条 item 已经隐含了编号）
-- 想强调某个词就用中文引号「」或者书名号《》。需要换行就用真实 \n。
+- 想强调某个词就用中文引号「」或者书名号《》。需要换行就用真实 \\n。
 
-Schema:
+Schema（CURRENCY 占位 = HKD|USD|GBP|EUR|CNY|SGD|AUD|CAD|JPY|KRW 之一）：
 {
-  "school": string,                         // 学校全名（offer 上的原文，可能是英文）
-  "school_zh": string | null,               // 学校常用中文名，如 "香港理工大学"。没有公认中文名就 null
-  "program": string,                        // 项目 / 专业名（offer 原文）
-  "program_zh": string | null,              // 项目中文名，如 "可持续能源理学硕士"
-  "degree": string | null,                  // 例如 "Master", "Bachelor", "PhD"
-  "degree_zh": string | null,               // 学位中文名："硕士" / "学士" / "博士"
-  "country": string | null,                 // ISO 国家名或常用中/英名
-  "country_zh": string | null,              // 国家或地区中文名，如 "中国香港" / "英国" / "美国"
-  "faculty": string | null,                 // 学院 / 学部，如 "Faculty of Engineering"
-  "faculty_zh": string | null,              // 学院中文名，如 "工程学院"
-  "student_category": string | null,        // offer 上写明的学生类别，如 "Non-local student" / "本地学生"
-  "language": string | null,                // offer 原文语言（如 "en", "zh", "fr"）
-  "duration": string | null,                // 项目时长，如 "1 年" / "1.5 年" / "2 年" / "30 学分"
-  "applicant_name": string | null,          // 录取人姓名（"Dear X" / "Applicant Name: X" / "亲爱的 X"），中文优先
-  "offer_issue_date": string | null,        // offer 信件发出日期，归一到 YYYY-MM-DD（找不到就 null）
-  "term_start_text": string | null,         // 入学时间的中文描述（即使无具体日期，也要写学期+学年）
+  "school": string,                         // offer 原文学校名
+  "school_zh": string | null,               // 公认中文名；没有就 null
+  "program": string,                        // offer 原文专业名
+  "program_zh": string | null,
+  "degree": string | null,                  // Master / Bachelor / PhD 等
+  "degree_zh": string | null,
+  "country": string | null,
+  "country_zh": string | null,
+  "faculty": string | null,
+  "faculty_zh": string | null,
+  "student_category": string | null,        // Non-local / 本地学生 等
+  "language": string | null,                // en / zh / fr 等
+  "duration": string | null,                // "1 年" / "30 学分" 等
+  "applicant_name": string | null,          // 中文优先
+  "offer_issue_date": string | null,        // YYYY-MM-DD
+  "term_start_text": string | null,         // 入学时间中文描述
   "key_dates": [
-    {
-      "type": "accept_deadline" | "deposit_deadline" | "term_start" | "tuition_deadline" | "document_deadline" | "other",
-      "date": string,                       // ISO 8601，"YYYY-MM-DD"
-      "label": string                       // 中文人类可读标签
-    }
+    { "type": "accept_deadline"|"deposit_deadline"|"term_start"|"tuition_deadline"|"document_deadline"|"other",
+      "date": string, "label": string }
   ],
   "fees": {
-    "tuition":     { "amount": number, "currency": "HKD"|"USD"|"GBP"|"EUR"|"CNY"|"SGD"|"AUD"|"CAD"|"JPY"|"KRW", "period": "year"|"term"|"total", "note": string|null, "is_partial": boolean } | null,
-    "deposit":     { "amount": number, "currency": "HKD"|"USD"|"GBP"|"EUR"|"CNY"|"SGD"|"AUD"|"CAD"|"JPY"|"KRW", "note": string|null } | null,
-    "scholarship": { "amount": number, "currency": "HKD"|"USD"|"GBP"|"EUR"|"CNY"|"SGD"|"AUD"|"CAD"|"JPY"|"KRW", "note": string } | null
+    "tuition":     { "amount": number, "currency": CURRENCY, "period": "year"|"term"|"total", "note": string|null, "is_partial": boolean } | null,
+    "deposit":     { "amount": number, "currency": CURRENCY, "note": string|null } | null,
+    "scholarship": { "amount": number, "currency": CURRENCY, "note": string } | null
   } | null,
   "conditions": [
-    {
-      "item": string,                       // 一句话主述（含具体院校名 / 专业 / 分数等关键细节）
-      "details": string | null,             // 扩展说明：可接受的格式、有效期、备选方案、考试代码、英文翻译要求等
-      "status": "required" | "optional" | "met",
-      "deadline": string | null
-    }
+    { "item": string, "details": string | null,
+      "status": "required"|"optional"|"met", "deadline": string | null }
   ],
   "must_do": [
-    {
-      "action": string,                     // 一句话主述（在哪里操作、上传什么、金额等核心信息）
-      "details": string | null,             // 扩展说明：URL、缴费金额构成、联系邮箱、其它操作步骤
-      "deadline": string | null,
-      "priority": "high" | "medium" | "low"
-    }
+    { "action": string, "details": string | null, "deadline": string | null,
+      "priority": "high"|"medium"|"low" }
   ],
-  "raw_highlights": [ string ],             // 原文中最关键的 1-5 句摘录
-  "notes": [ string ],                      // 重要备注（材料真实性、不退费、签证自办、Concurrent Registration 等），每条一句中文
-  "info_gaps": [ string ],                  // 直接返回 []，由后端根据 coverage 反推
-  "coverage": {                             // 必填：offer 原文对每个主题说了什么
-    "tuition":          "stated_full" | "stated_partial" | "stated_estimate" | "absent",
-    "deposit":          "required_with_amount" | "required_no_amount" | "explicitly_none" | "absent",
-    "deposit_deadline": "stated" | "absent",
-    "term_start":       "stated_date" | "stated_term_only" | "absent",
-    "duration":         "stated" | "absent",
-    "accept_deadline":  "stated" | "absent"
+  "raw_highlights": [ string ],             // 原文最关键 1-5 句
+  "notes": [ string ],                      // 重要备注，每条一句中文
+  "info_gaps": [ string ],                  // 固定返回 []，后端反推
+  "coverage": {
+    "tuition":          "stated_full"|"stated_partial"|"stated_estimate"|"absent",
+    "deposit":          "required_with_amount"|"required_no_amount"|"explicitly_none"|"absent",
+    "deposit_deadline": "stated"|"absent",
+    "term_start":       "stated_date"|"stated_term_only"|"absent",
+    "duration":         "stated"|"absent",
+    "accept_deadline":  "stated"|"absent"
   },
-  "summary": string                         // 500-800 字中文叙事（详见下方"叙事解读"段落）
+  "summary": string                         // 500-800 字中文（详见"叙事解读"段）
 }
 
 叙事解读 (summary) - 必填，最重要的兜底字段:
@@ -232,43 +221,16 @@ program 是会出现在分享卡核心位置的字段，**绝对不能**只写�
    → 从代码推 program = "MSc in Computer Science"，program_zh = "计算机科学理学硕士"
 
 抽取规则（续）：
-- 中文名规则：
-  - school_zh 是学校的常用中文名，例如 "The Hong Kong Polytechnic University" → "香港理工大学"；"University College London" → "伦敦大学学院"；"University of California, Berkeley" → "加州大学伯克利分校"；"The University of Hong Kong" → "香港大学"；"Imperial College London" → "帝国理工学院"。学校没有公认中文名就 null，不要硬翻。
-  - program_zh 是项目的中文译名（学校官方公布的优先；没有就用通用直译），例如 "MSc Sustainable Energy" → "可持续能源理学硕士"；"MSc Computer Science" → "计算机科学理学硕士"；"MBA" → "工商管理硕士"。
-  - degree_zh: Master/MSc/MA → "硕士"；Bachelor/BSc/BA → "学士"；PhD/Doctor of Philosophy → "博士"；Master of Engineering → "工程硕士"。
-  - country_zh: Hong Kong → "中国香港"；United Kingdom/UK → "英国"；United States/US → "美国"；Australia → "澳大利亚"；Singapore → "新加坡"；Mainland China → "中国大陆"。
+- 中文名规则（核心：抄原文 + 不会就 null）：
+  - school：抄 offer 上的英文 / 原文学校名。
+  - school_zh：填该校常用中文名；想不出公认中文名就 null（**绝不机械直译**——后端有 175 校查表会兜底）。
+  - program_zh：项目中文译名（官方公布的优先；通用直译次之）。例 "MSc Computer Science" → "计算机科学理学硕士"，"MBA" → "工商管理硕士"。
+  - degree_zh: Master → 硕士 / Bachelor → 学士 / PhD → 博士 / Master of Engineering → 工程硕士。
+  - country_zh: Hong Kong → 中国香港 / UK → 英国 / US → 美国 / Mainland China → 中国大陆。
 
-⚠️ 中国大学中文名查表（**必须用公认中文名，不要机械翻译**）：
-- Central South University → **中南大学**（不是"中央南大学"）
-- Tsinghua University → 清华大学
-- Peking University → 北京大学
-- Fudan University → 复旦大学
-- Shanghai Jiao Tong University → 上海交通大学
-- Zhejiang University → 浙江大学
-- Renmin University of China → 中国人民大学
-- Sun Yat-sen University → 中山大学
-- Beijing Normal University → 北京师范大学
-- Wuhan University → 武汉大学
-- Nanjing University → 南京大学
-- Xi'an Jiaotong University → 西安交通大学
-- Harbin Institute of Technology → 哈尔滨工业大学
-- The University of Hong Kong / HKU → 香港大学
-- The Chinese University of Hong Kong / CUHK → 香港中文大学
-- The Hong Kong University of Science and Technology / HKUST → 香港科技大学
-- The Hong Kong Polytechnic University / PolyU → 香港理工大学
-- City University of Hong Kong / CityU → 香港城市大学
-- Hong Kong Baptist University / HKBU → 香港浸会大学
-- The Education University of Hong Kong / EdUHK → 香港教育大学
-- Lingnan University → 岭南大学
-- 不在上表里的中国大学，要先想这个学校的**官方中文名**再写；想不出来就用 null（在 conditions / details 里也保留 null 或写英文原名），**绝不**机械直译。
+中国大学（提到时**绝不机械直译**——例 Central South University = "中南大学" 不是"中央南大学"）：想得出官方中文名就用；想不出就 null。
 
-英文 → 中文翻译陷阱（不要按字面翻译）：
-英文 → 中文翻译陷阱（不要按字面翻译）：
-- 提到外国学校或机构名时，先用其公认中文名，没有就保留英文。
-- 不要把 "X College" 永远翻成 "X 学院"；很多 College 实际叫 "学院" 或 "大学"。Imperial College London → 帝国理工学院。
-- "School of X" 在大学语境是"X 学院"或"学系"。
-
-- **英文规范化**：如果 offer 把学校或专业名写成全大写（如 "THE HONG KONG POLYTECHNIC UNIVERSITY" / "MSC SUSTAINABLE ENERGY"），抽取到 school / program 字段时**必须规范化为 Title Case**："The Hong Kong Polytechnic University" / "MSc Sustainable Energy"。常见缩写保持原样大写：MSc, MA, MBA, PhD, BSc, BA, MEng, MFA, LLM, MPhil, USA, UK, HK, MIT, NUS。
+- **英文规范化**：offer 写全大写的学校 / 专业名（"THE HONG KONG POLYTECHNIC UNIVERSITY"），抽取到 school / program 时规范化为 Title Case。常见缩写（MSc, MBA, PhD, BSc, BA, MEng, LLM, MPhil, USA, UK, HK, MIT, NUS）保留大写。
 
 申请人姓名 (applicant_name)：
 - 从 offer 上抽取被录取学生的姓名。常见位置：
@@ -346,24 +308,10 @@ conditions vs must_do（必须区分清楚，不要同一件事写在两处）�
 - **每一个具体日期**都必须出现在某个字段的 deadline 中（must_do.deadline / conditions.deadline / key_dates.date）。**漏掉任何一个具体日期都属于严重错误**。
 - 一份合格的输出，应该让用户仅看抽取结果就能知道"我什么时候要做什么"，而不需要再回去翻 offer 原文。
 
-币种 (currency) — 严格白名单:
-- **必须**输出下面 10 个三字母 ISO 代码之一，不允许任何其它写法：
-  HKD（港币）/ USD（美元）/ GBP（英镑）/ EUR（欧元）/ CNY（人民币）
-  SGD（新加坡元）/ AUD（澳元）/ CAD（加元）/ JPY（日元）/ KRW（韩元）
-- ❌ **绝对不要**输出 "RMB" / "Yuan" / "元" / "人民币" / "HK$" / "$" / "美金" / "港纸" / "Pounds" / "欧元" / "新币" / "澳币" / "韩币" / "$AUD" / "HK Dollar" 等任何非 ISO 写法。
-- 常见映射（offer 原文里的写法 → 你应该输出的代码）：
-  · "RMB" / "Yuan" / "元" / "人民币" / "￥" / "¥" + 中文金额 → CNY
-  · "HK$" / "HKD$" / "港币" / "港纸" / "Hong Kong Dollar" → HKD
-  · "$" / "US$" / "USD$" / "美金" / "美元" / "US Dollar" → USD
-  · "£" / "GBP£" / "英镑" / "Pounds Sterling" / "British Pound" → GBP
-  · "€" / "EUR€" / "欧元" / "Euros" → EUR
-  · "S$" / "SG$" / "Singapore Dollar" / "新币" / "新加坡元" → SGD
-  · "A$" / "AU$" / "AUD$" / "Aussie Dollar" / "澳元" / "澳币" → AUD
-  · "C$" / "CA$" / "Canadian Dollar" / "加元" / "加币" → CAD
-  · "JP¥" / "Japanese Yen" / "日元" / "日円" → JPY
-  · "₩" / "Korean Won" / "韩元" / "韩币" / "원" → KRW
-- "$" 单独出现时**必须**根据上下文判断（offer 学校所在国 / 文档其它地方的国家代码 / 抬头）：美国学校 → USD；港校 → HKD；澳校 → AUD；加校 → CAD；新校 → SGD。判断不出来时**优先用学校所在地**的币种。
-- 如果 offer 上的币种**完全不在**上述 10 个里（极罕见，比如瑞士法郎、瑞典克朗），把 currency 字段设为 null（不要硬塞一个最近的代码）。不要往 info_gaps 写——info_gaps 由后端反推。
+币种 (currency) — 严格 ISO 白名单：
+- 输出 schema 中已列的 10 个 ISO 代码之一（HKD / USD / GBP / EUR / CNY / SGD / AUD / CAD / JPY / KRW）。任何中文 / 符号 / 非 ISO 写法（"RMB" / "$" / "£" / "港币" / "人民币" 等）都按各自语言映射成 ISO 代码后再输出。
+- "$" 单独出现：按学校所在地推断（US → USD / HK → HKD / AU → AUD / CA → CAD / SG → SGD）。
+- 不在白名单里的（瑞郎、瑞典克朗等）→ currency 字段填 null（**不要**硬塞最近代码、**不要**往 info_gaps 写）。
 
 学费抽取（**严格按以下优先级**，从高到低）：
 
@@ -442,47 +390,12 @@ key_dates 与 must_do：
 - must_do 是"用户要做的动作"，不是信息描述。
 - 日期归一到 YYYY-MM-DD。"within 2 weeks" 这类无法解析就 null。
 
-🚨🚨🚨 输出 JSON **之前**必须逐项确认（自检清单） 🚨🚨🚨
-逐条对照下方清单。**任何一项遗漏 offer 上明明写着的内容都属于严重错误**。
+输出 JSON 前自检（最常见的丢信息错误，只列三条）：
 
-☐ 1. school_zh 用的是该校**公认中文名**，不是机械字面翻译。
-     - "Central South University" → "中南大学" ✅，**不是** "中央南大学" ❌
-     - 不在中文名查表里、且想不出公认中文名时 —— **保留 null，不要硬翻**。
+☐ 1. **每条 condition 的 details 已填完整**——offer 同段落给的学历验证规格、语言成绩具体分数+考试代码+有效期、OR 选项的全部分支，都要逐字进 details。"提交语言成绩"不带分数 / 漏掉任一 OR 选项 = 错误。
 
-☐ 2. applicant_name 已抽（中文优先；"Mr. Wang Chenchen" → "Wang Chenchen"）。
+☐ 2. **每条 must_do 的 details 已填完整**——上传 / 缴费 URL、首期金额构成（"HK\$X = 首期学费 + 留位费 + 学生活动费"）、逾期后果 / 不退款警告，都要进 details 或 notes[]。
 
-☐ 3. faculty_zh 已抽（如 Faculty of Engineering → "工程学院"）。
+☐ 3. **notes[] 已扫**——offer 所有 "Notes on..." / "Important Notes" / "Authenticity" / "Visa Arrangement" / "Concurrent Registration" / "Refund Policy" / "Caution Money is non-refundable" 段落每条单独成 note，不合并、不省略。
 
-☐ 4. student_category 已抽（Non-local student / 本地学生 等，offer 上有就一定要填）。
-
-☐ 5. **每条 condition 的 details 字段已填完整**：
-     - 如果 offer 同段落给了**学历认证 / 验证报告**的具体规格 → 必须把"学信网中英双语《学位证书在线验证报告》/《学历证书电子注册备案表》/《高等学校学生成绩单在线验证报告》、6 个月有效期、由教育部授权机构出具"等细节**逐字逐项**写进 details，不能简化为"附英文翻译"或"做认证"。
-     - 如果 offer 给了**语言成绩具体分数**（TOEFL ≥ 80 iBT / IELTS ≥ 6.0 单项 ≥ 5.5、考试代码 9671、两年内有效、由考试机构直送）→ 必须**全部**写进对应 condition.details。
-     - 写 "提交语言成绩" 而不写具体分数 = 错误。
-     - 当 offer 给"OR 选项"（如成绩单可选官方原件 OR 学信网验证报告）时，**两个选项都必须**列在同一条 condition 的 details 里（参见前面 OR 选项示例）。漏掉任一选项 = 错误。
-
-☐ 5b. **conditions[] 不含元条件 / 过渡句**：
-     - "在 X 大学完成 X 硕士项目"、"须满足以下所有要求"、"录取条件如下" 这类**不是**具体条件，应直接从 conditions[] 中删掉。conditions[] 第一条必须是真实的资格 / 文件 / 学位要求。
-
-☐ 6. **每条 must_do 的 details 字段已填完整**：
-     - 如果 offer 给了上传 / 缴费的 URL → 写进 details。
-     - 如果首期付款是 "HK$X = 首期学费 + 留位费 + 学生活动费" 这种合计 → details 里写明金额构成。
-     - 如果 offer 写了"逾期视为放弃录取" / "款项不退" → 必须写进 details 或 notes[]。
-
-☐ 7. **notes[] 数组已抽**：扫一遍 offer 的 "Notes on..." / "Important Notes" / "Authenticity" / "Visa Arrangement" / "Concurrent Registration" / "Refund Policy" / "Caution Money is non-refundable" 等所有附加说明段落 —— **每条**都要单独成为一条 note，不能合并、不能省略。
-
-☐ 8. **留位费不退还的提醒**：fees.deposit.note 或 notes[] 至少有一处说"已缴款项不退还也不可转让，除非未能满足录取条件"（前提是 offer 上确实写了类似的话；如果 offer 没写就不要编造）。
-
-☐ 9. 学费抽取符合优先级（offer 明示 total → 直接用，分期不影响）。
-
-☐ 10. 每个具体日期都已落到某个 deadline / date 字段，没有日期被丢弃。
-
-☐ 11. action / item 文本里**没有**填充语 ("在指定时间内" / "按规定时间" / "by the prescribed time")。
-
-☐ 12. **summary 已写、达到 500-800 字、且覆盖关键 conditions / must_do / notes 的细节**——summary 是给中介复制粘贴发给学生的工作产物，必须 self-contained。光抽好结构化字段、summary 写两句客套话 = 严重错误。
-
-如果以上任何一项你只做了一半（例如填了 conditions 但没填 details，或抽了部分 notes 但漏了"不退款"和"Concurrent Registration"），那就回去补全再输出。`;
-
-export interface ExtractOptions {
-  apiKey: string;
-  provider?: Provider;
+如果上面任一项只做了一半，回去补全再输出。
