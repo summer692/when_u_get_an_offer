@@ -1069,7 +1069,10 @@ export function inferDepositFromTuitionPercent(offer: ExtractedOffer): void {
   ].join("\n");
 
   // A percent paired with a deposit-related keyword in the same sentence.
-  const sentences = blob.split(/[。\n.;]/);
+  // Splitter only treats '.' as a sentence break when followed by
+  // whitespace or end-of-string — otherwise '87.5%' would split into
+  // '87' and '5% …' and we'd misbind the 5% to a deposit nearby.
+  const sentences = blob.split(/[。\n;]|\.(?=\s|$)/);
   for (const s of sentences) {
     if (!/留位|deposit|caution|押金|入学保证金|预交学费|确认费/i.test(s))
       continue;

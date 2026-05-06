@@ -183,6 +183,28 @@ describe("computeInfoGaps — coverage-driven (v10+)", () => {
     });
     expect(computeInfoGaps(offer)).toEqual([]);
   });
+
+  it("explicitly_none deposit — guarantees zero deposit-related gaps even when other fields are missing", () => {
+    // Negative: when offer affirmatively says no deposit, the resolver
+    // must NEVER emit '留位费金额未明确' nor '留位费截止日期未明确', no
+    // matter what other fields look like. Pin this so future logic
+    // changes can't accidentally start firing deposit gaps on
+    // explicitly_none offers.
+    const offer = makeOffer({
+      coverage: {
+        tuition: "absent",
+        deposit: "explicitly_none",
+        deposit_deadline: "absent",
+        term_start: "absent",
+        duration: "absent",
+        accept_deadline: "absent",
+      },
+    });
+    const gaps = computeInfoGaps(offer);
+    for (const g of gaps) {
+      expect(g.includes("留位")).toBe(false);
+    }
+  });
 });
 
 describe("inheritDepositDeadline", () => {
@@ -241,6 +263,31 @@ describe("inheritDepositDeadline", () => {
     };
     inheritDepositDeadline(offer);
     expect(offer.must_do![0].deadline).toBeUndefined();
+  });
+
+  it("must_do is undefined → no crash", () => {
+    // Negative: must not throw on offers without must_do.
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "Test",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+    };
+    expect(() => inheritDepositDeadline(offer)).not.toThrow();
+  });
+
+  it("must_do is empty array → no crash, no mutation", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "Test",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+      must_do: [],
+    };
+    inheritDepositDeadline(offer);
+    expect(offer.must_do).toEqual([]);
   });
 });
 
@@ -352,6 +399,38 @@ describe("applySchoolNameOverride", () => {
     expect(offer.conditions![0].item).toBe("提交帝国理工学院要求的成绩单");
   });
 
+  it("idempotent — when LLM already gave the canonical name, prose is not swept", () => {
+    // Negative: previous === canonical, function should bail early.
+    // This guards against "double replacement" if normalize runs twice.
+    const offer: ExtractedOffer = {
+      school: "Imperial College London",
+      school_zh: "帝国理工学院",
+      program: "MSc",
+      key_dates: [],
+      summary: "你获得帝国理工学院的录取，太棒了。",
+    };
+    applySchoolNameOverride(offer);
+    expect(offer.school_zh).toBe("帝国理工学院");
+    expect(offer.summary).toBe("你获得帝国理工学院的录取，太棒了。");
+  });
+
+  it("empty previous school_zh — prose untouched even though we have a canonical", () => {
+    // Negative: previous is empty, so no string-replace target exists.
+    // Function should set school_zh but NOT sweep prose blindly.
+    const offer: ExtractedOffer = {
+      school: "Imperial College London",
+      school_zh: "",
+      program: "MSc",
+      key_dates: [],
+      summary: "Some summary that does not mention any Chinese school name.",
+    };
+    applySchoolNameOverride(offer);
+    expect(offer.school_zh).toBe("帝国理工学院");
+    expect(offer.summary).toBe(
+      "Some summary that does not mention any Chinese school name.",
+    );
+  });
+
   it("Hong Kong universities — three distinct entries are all wired up", () => {
     const cases: Array<[string, string]> = [
       ["The University of Hong Kong", "香港大学"],
@@ -445,6 +524,55 @@ describe("inferDepositFromTuitionPercent", () => {
     };
     inferDepositFromTuitionPercent(offer);
     expect(offer.fees?.deposit?.amount).toBe(5000);
+  });
+
+  it("percent > 50 sanity guard — does NOT bind a pass-rate to deposit", () => {
+    // Codex flagged: 'resolver could become aggressive, e.g. binding any
+    // percent to deposit'. 87.5% is the BSc grade requirement in real
+    // Imperial offers; 'deposit' word also appears elsewhere. We must
+    // not compute deposit = tuition × 87.5%.
+    const offer: ExtractedOffer = {
+      school: "Imperial",
+      program: "MSc",
+      key_dates: [],
+      fees: { tuition: { amount: 38600, currency: "GBP" } },
+      conditions: [
+        {
+          item: "Bachelor's degree with 87.5% average required for deposit-eligible admission",
+          status: "required",
+        },
+      ],
+    };
+    inferDepositFromTuitionPercent(offer);
+    expect(offer.fees?.deposit).toBeUndefined();
+  });
+
+  it("zero percent in a deposit sentence → no compute", () => {
+    // Negative: pct must be > 0. Defends against weird edge cases like
+    // '0% deposit promotional offer'.
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      fees: { tuition: { amount: 50000, currency: "USD" } },
+      notes: ["0% deposit required for early acceptance"],
+    };
+    inferDepositFromTuitionPercent(offer);
+    expect(offer.fees?.deposit).toBeUndefined();
+  });
+
+  it("'学费减免 10%' (tuition discount, not deposit) → no compute", () => {
+    // Negative: '学费' word is present but no deposit keyword in the
+    // sentence. Must not misfire as a deposit calculation.
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      fees: { tuition: { amount: 50000, currency: "USD" } },
+      notes: ["你已获得学费减免 10%"],
+    };
+    inferDepositFromTuitionPercent(offer);
+    expect(offer.fees?.deposit).toBeUndefined();
   });
 });
 
