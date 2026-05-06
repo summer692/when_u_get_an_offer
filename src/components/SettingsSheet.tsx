@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { clearAllCaches, getSettings, setSetting } from "../lib/db";
 import { readExtractionLog, type ExtractionLogEntry } from "../lib/debugLog";
-import { DEFAULT_PROVIDER, PROVIDERS } from "../lib/llm";
+import { DEFAULT_PROVIDER, PROVIDERS, isEmbeddedMode } from "../lib/llm";
 import type { Provider } from "../lib/schema";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Modal } from "./Modal";
@@ -169,53 +169,64 @@ export function SettingsSheet({ open, onClose }: Props) {
           </button>
         </div>
 
-        <div className="space-y-8">
-          <Field label="服务商">
-            <Segmented
-              options={(Object.keys(PROVIDERS) as Provider[]).map((p) => ({
-                id: p,
-                label: PROVIDER_META[p].label,
-              }))}
-              value={provider}
-              onChange={(v) => changeProvider(v as Provider)}
-            />
-          </Field>
+        {isEmbeddedMode() ? (
+          <div className="space-y-2 text-sm text-ink-700 dark:text-ink-300">
+            <p>
+              你不需要配置 API Key —— OfferLens 已经为你接入 AI 模型。
+            </p>
+            <p className="text-xs text-ink-500">
+              抽取走我们自己的服务（Cloudflare Worker → Gemini）。每天有限额，被刷爆时请稍后再试。
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            <Field label="服务商">
+              <Segmented
+                options={(Object.keys(PROVIDERS) as Provider[]).map((p) => ({
+                  id: p,
+                  label: PROVIDER_META[p].label,
+                }))}
+                value={provider}
+                onChange={(v) => changeProvider(v as Provider)}
+              />
+            </Field>
 
-          <Field label={`${meta.label} API Key`} hint={meta.keyHint}>
-            <input
-              type="password"
-              value={keys[provider]}
-              onChange={(e) =>
-                setKeys((k) => ({ ...k, [provider]: e.target.value }))
-              }
-              placeholder={meta.placeholder}
-              className="w-full px-4 py-3 bg-ink-100 dark:bg-ink-900 border border-transparent focus:border-ink-900 dark:focus:border-white focus:outline-none transition-colors"
-            />
-            <a
-              href={meta.keyUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs underline underline-offset-4 mt-3 inline-block"
-            >
-              获取 {meta.label} key →
-            </a>
-          </Field>
+            <Field label={`${meta.label} API Key`} hint={meta.keyHint}>
+              <input
+                type="password"
+                value={keys[provider]}
+                onChange={(e) =>
+                  setKeys((k) => ({ ...k, [provider]: e.target.value }))
+                }
+                placeholder={meta.placeholder}
+                className="w-full px-4 py-3 bg-ink-100 dark:bg-ink-900 border border-transparent focus:border-ink-900 dark:focus:border-white focus:outline-none transition-colors"
+              />
+              <a
+                href={meta.keyUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs underline underline-offset-4 mt-3 inline-block"
+              >
+                获取 {meta.label} key →
+              </a>
+            </Field>
 
-          <Field label="模型">
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="w-full px-4 py-3 bg-ink-100 dark:bg-ink-900 border border-transparent focus:border-ink-900 dark:focus:border-white focus:outline-none transition-colors"
-            >
-              {config.models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                  {m.note ? ` · ${m.note}` : ""}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
+            <Field label="模型">
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="w-full px-4 py-3 bg-ink-100 dark:bg-ink-900 border border-transparent focus:border-ink-900 dark:focus:border-white focus:outline-none transition-colors"
+              >
+                {config.models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                    {m.note ? ` · ${m.note}` : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        )}
 
         <div className="mt-10 pt-8 border-t border-ink-100 dark:border-ink-700">
           <div className="section-label mb-3">抽取调试</div>

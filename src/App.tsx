@@ -14,9 +14,11 @@ import {
   applyResearch,
   extractOffer,
   extractionCacheKey,
+  isEmbeddedMode,
   programIsComplete,
   researchOffer,
 } from "./lib/llm";
+import { TurnstileWidget } from "./components/TurnstileWidget";
 import {
   getCachedExtraction,
   getCachedOcr,
@@ -39,13 +41,31 @@ export default function App() {
   const [stage, setStage] = useState<string | null>(null);
   const [quickMode, setQuickMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cloudflare Turnstile token, valid ~5 min. The widget refreshes
+  // automatically on expiry; this state holds the latest one.
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileResetCounter, setTurnstileResetCounter] = useState(0);
 
   const active = offers.find((o) => o.id === activeId) ?? null;
 
   const ensureKey = useCallback(async () => {
+    // Embedded mode: server holds the key. Just need a Turnstile token.
+    if (isEmbeddedMode()) {
+      if (!turnstileToken) {
+        throw new Error(
+          "人机验证还没准备好，请等几秒再试（如果一直没好，刷新页面）",
+        );
+      }
+      return {
+        apiKey: "",
+        provider: "google" as Provider,
+        model: undefined,
+        turnstileToken,
+      };
+    }
+    // BYOK mode (legacy / dev): user provides key via settings.
     const s = await getSettings();
     const provider = s.provider ?? DEFAULT_PROVIDER;
-    // Per-provider key wins; legacy single apiKey is the fallback.
     const apiKey = s.apiKeys?.[provider] ?? s.apiKey;
     if (!apiKey) {
       setSettingsOpen(true);
@@ -57,8 +77,8 @@ export default function App() {
             : "OpenRouter";
       throw new Error(`当前服务商是 ${label}，请在设置中填入它的 API Key`);
     }
-    return { apiKey, provider, model: s.model };
-  }, []);
+    return { apiKey, provider, model: s.model, turnstileToken: undefined };
+  }, [turnstileToken]);
 
   /** Common tail: build the Offer record from a finished ExtractedOffer
    * and save it. Shared between the cache-hit fast path and the normal
@@ -104,6 +124,7 @@ export default function App() {
       apiKey: string,
       provider: Provider,
       model: string,
+      turnstileToken: string | undefined,
     ) => {
       setQuickMode(false);
       setStage("OfferLens 阅读中，请站在此地不要动......");
@@ -111,11 +132,17 @@ export default function App() {
         apiKey,
         provider,
         model,
+        turnstileToken,
         onProgress: () => {
           // Internal fallback / retry messages are intentionally swallowed
           // so the loading copy stays calm and consistent.
         },
       });
+      // Embedded mode tokens are one-shot — re-render widget for next use.
+      if (isEmbeddedMode()) {
+        setTurnstileToken(null);
+        setTurnstileResetCounter((n) => n + 1);
+      }
 
       const cacheKey = extractionCacheKey(fileHash, provider, model);
       saveCachedExtraction(cacheKey, extracted).catch((err) =>
@@ -172,7 +199,8 @@ export default function App() {
         // Resolve provider+model first so we can include them in the
         // cache key. Different (provider, model) trios produce different
         // extractions — they must NOT share cache entries.
-        const { apiKey, provider, model } = await ensureKey();
+        const { apiKey, provider, model, turnstileToken: tt } =
+          await ensureKey();
         const resolvedProvider = provider ?? DEFAULT_PROVIDER;
         const resolvedModel = model ?? PROVIDERS[resolvedProvider].defaultModel;
 
@@ -211,6 +239,7 @@ export default function App() {
           apiKey,
           resolvedProvider,
           resolvedModel,
+          tt,
         );
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -228,7 +257,8 @@ export default function App() {
         setQuickMode(false);
         setStage("OfferLens 阅读中,请站在此地不要动......");
 
-        const { apiKey, provider, model } = await ensureKey();
+        const { apiKey, provider, model, turnstileToken: tt } =
+          await ensureKey();
         const resolvedProvider = provider ?? DEFAULT_PROVIDER;
         const resolvedModel = model ?? PROVIDERS[resolvedProvider].defaultModel;
 
@@ -250,6 +280,7 @@ export default function App() {
           apiKey,
           resolvedProvider,
           resolvedModel,
+          tt,
         );
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -298,6 +329,18 @@ export default function App() {
         quickMode={quickMode}
         onDismissError={() => setError(null)}
       />
+
+      {/* Turnstile widget. In embedded mode, this prepares a token before
+          the user uploads. interaction-only appearance keeps the widget
+          tucked away unless Cloudflare decides a challenge is needed. */}
+      {isEmbeddedMode() && (
+        <div className="fixed bottom-4 right-4 z-30 pointer-events-auto">
+          <TurnstileWidget
+            resetCounter={turnstileResetCounter}
+            onToken={setTurnstileToken}
+          />
+        </div>
+      )}
     </div>
   );
 }

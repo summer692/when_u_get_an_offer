@@ -528,6 +528,8 @@ key_dates 与 must_do：
 如果上面任一项只做了一半，回去补全再输出。`;
 
 export interface ExtractOptions {
+  /** BYOK only. In embedded mode (VITE_API_BASE set) the Worker holds
+   * the key and this can be empty. */
   apiKey: string;
   provider?: Provider;
   model?: string;
@@ -535,6 +537,9 @@ export interface ExtractOptions {
   /** Called when the chain falls back to a different model or sleeps for a
    * retry, so the UI can keep the user informed instead of looking frozen. */
   onProgress?: (message: string) => void;
+  /** Cloudflare Turnstile token, required by the Worker in embedded mode.
+   * Ignored in BYOK mode. */
+  turnstileToken?: string;
 }
 
 /** Bumping this string invalidates every cached extraction so users pick up
@@ -599,10 +604,25 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  * responsibility (App.tsx) so the loading-bar UX can branch on cache-hit
  * before kicking off any work. extractOffer always calls the model.
  */
+/** Embedded-mode endpoint. When set (production deploy), all extraction
+ * goes through the Cloudflare Worker which holds the Gemini API key.
+ * When unset (dev / legacy), extraction falls back to BYOK direct calls. */
+export const EMBEDDED_API_BASE: string | undefined =
+  (import.meta.env.VITE_API_BASE as string | undefined) || undefined;
+
+export function isEmbeddedMode(): boolean {
+  return !!EMBEDDED_API_BASE;
+}
+
 export async function extractOffer(
   input: ParsedInput,
   opts: ExtractOptions
 ): Promise<ExtractedOffer> {
+  // Embedded mode: skip the per-provider fallback chain (Worker decides)
+  // and POST a single request to /api/extract.
+  if (isEmbeddedMode()) {
+    return extractViaWorker(input, opts);
+  }
   const provider = opts.provider ?? DEFAULT_PROVIDER;
   const config = PROVIDERS[provider];
   const userModel = opts.model || config.defaultModel;
@@ -642,6 +662,103 @@ export async function extractOffer(
     : new Error("All models exhausted");
 }
 
+/**
+ * Embedded-mode extraction: POST the messages payload to our Cloudflare
+ * Worker, which validates Turnstile, rate-limits per IP, and forwards
+ * to Gemini with a server-held key. The response shape matches what
+ * direct OpenAI-compatible providers return, so the existing JSON parse
+ * + normalize flow at the bottom of extractOnce just works.
+ */
+async function extractViaWorker(
+  input: ParsedInput,
+  opts: ExtractOptions,
+): Promise<ExtractedOffer> {
+  if (!opts.turnstileToken) {
+    throw new Error("缺少人机验证 token，请刷新页面后重试");
+  }
+  const userContent = buildUserMessageContent(input);
+  const messages = [
+    { role: "system" as const, content: SYSTEM_PROMPT },
+    { role: "user" as const, content: userContent },
+  ];
+
+  const res = await fetch(`${EMBEDDED_API_BASE}/api/extract`, {
+    method: "POST",
+    signal: opts.signal,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      turnstile_token: opts.turnstileToken,
+      // Worker validates against its own allow-list; sending opts.model
+      // is just a hint, server may override.
+      model: opts.model,
+      messages,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    if (res.status === 429) {
+      throw new Error(body || "今日免费额度已用完，请明天再试");
+    }
+    if (res.status === 403) {
+      throw new Error("人机验证失败，请刷新页面重试");
+    }
+    throw new Error(`服务暂不可用 (${res.status}): ${body.slice(0, 300)}`);
+  }
+
+  const json = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const content = json?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error("LLM 返回为空，请稍后重试");
+  }
+  const provider: Provider = "google";
+  const model = opts.model ?? "gemini-2.5-flash-lite";
+  const parsed = safeJsonParse(content) as Record<string, unknown> | null;
+  const looksOk = !!parsed && typeof parsed === "object" && !!parsed.school;
+  recordExtractionLog({
+    provider,
+    model,
+    looksOk,
+    rawContent: content,
+    normalized: parsed,
+  });
+  if (!parsed) {
+    throw new Error("LLM 返回内容无法解析为 JSON，请稍后重试");
+  }
+  const out = normalizeExtracted(parsed);
+  return out;
+}
+
+/** Shared between BYOK direct calls and embedded-mode worker calls. */
+function buildUserMessageContent(
+  input: ParsedInput,
+): Array<
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } }
+> {
+  const userContent: Array<
+    | { type: "text"; text: string }
+    | { type: "image_url"; image_url: { url: string } }
+  > = [];
+  if (input.text.trim()) {
+    userContent.push({
+      type: "text",
+      text:
+        `下面是 offer 原文（${input.kind}，${input.sourceName ?? "pasted"}）：\n\n` +
+        input.text.slice(0, 60_000),
+    });
+  }
+  for (const img of input.images) {
+    userContent.push({ type: "image_url", image_url: { url: img } });
+  }
+  if (userContent.length === 0) {
+    userContent.push({ type: "text", text: "(empty)" });
+  }
+  return userContent;
+}
+
 async function extractWithRetry(
   input: ParsedInput,
   opts: ExtractOptions,
@@ -675,24 +792,7 @@ async function extractOnce(
   config: ProviderConfig,
   model: string,
 ): Promise<ExtractedOffer> {
-  const userContent: Array<
-    { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
-  > = [];
-
-  if (input.text.trim()) {
-    userContent.push({
-      type: "text",
-      text:
-        `下面是 offer 原文（${input.kind}，${input.sourceName ?? "pasted"}）：\n\n` +
-        input.text.slice(0, 60_000),
-    });
-  }
-  for (const img of input.images) {
-    userContent.push({ type: "image_url", image_url: { url: img } });
-  }
-  if (userContent.length === 0) {
-    userContent.push({ type: "text", text: "(empty)" });
-  }
+  const userContent = buildUserMessageContent(input);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

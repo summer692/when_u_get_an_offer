@@ -20,8 +20,8 @@ export function Hero({ onFile, onText, busy }: Props) {
         <UploadZone onFile={onFile} onText={onText} disabled={busy} />
       </div>
 
-      <div className="mt-6 text-xs text-ink-500 tracking-wide">
-        文件不会离开你的设备 · 只有你能看到
+      <div className="mt-6 text-xs text-ink-500 tracking-wide max-w-md leading-relaxed">
+        AI 抽取可能有误，关键信息（截止日期 / 金额）请核对原文再做决定。
       </div>
     </section>
   );
