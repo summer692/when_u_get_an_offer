@@ -97,32 +97,63 @@ export type CoverageStatus =
   | "absent";
 
 /**
+ * Derived coverage states. NOT emitted by the LLM — set by enrichCoverage
+ * after cross-validating LLM coverage against extracted/inferred data.
+ *
+ * - rule_detected_but_missing: LLM said "absent" but a field-filling step
+ *   (or the structured extraction itself) ended up with a value. Means
+ *   the LLM was inconsistent or our inference recovered the data.
+ * - conflict: LLM coverage explicitly contradicts the structured fields
+ *   (e.g. coverage.deposit = "explicitly_none" yet fees.deposit has an
+ *   amount). User may want to verify.
+ * - unsupported: LLM gave a value but no text evidence supports it.
+ *   Reserved for the future source_quote validator. */
+type DerivedCoverageState =
+  | "rule_detected_but_missing"
+  | "conflict"
+  | "unsupported";
+
+/**
  * What the offer itself says about each topic, regardless of what the
  * extractor managed to populate. The single source of truth that drives
  * the "需要核实" / 卡片显示 / "Offer 原文未提供" labels — instead of us trying
  * to infer presence from output JSON shape.
  *
- * Filled by the LLM during extraction. Legacy offers without a coverage
- * map fall back to heuristics in computeInfoGaps.
+ * Filled by the LLM during extraction (using only the LLM-emitted states).
+ * Then enrichCoverage may upgrade entries to derived states based on
+ * cross-validation. Legacy offers without coverage fall back to
+ * heuristics in computeInfoGaps.
  */
 export interface Coverage {
   /** stated_full = 给出明确的项目总学费; stated_partial = 只有首期/单学期等;
-   *  stated_estimate = 标注是估算/年度估算; absent = offer 完全没提学费 */
-  tuition: "stated_full" | "stated_partial" | "stated_estimate" | "absent";
+   *  stated_estimate = 标注是估算/年度估算; absent = offer 完全没提学费.
+   *  Plus derived states from enrichCoverage. */
+  tuition:
+    | "stated_full"
+    | "stated_partial"
+    | "stated_estimate"
+    | "absent"
+    | DerivedCoverageState;
   /** required_with_amount = offer 写了金额; required_no_amount = 说要交但没写金额;
-   *  explicitly_none = 明确说"无需"; absent = offer 完全没提 */
+   *  explicitly_none = 明确说"无需"; absent = offer 完全没提.
+   *  Plus derived states from enrichCoverage. */
   deposit:
     | "required_with_amount"
     | "required_no_amount"
     | "explicitly_none"
-    | "absent";
+    | "absent"
+    | DerivedCoverageState;
   /** Whether the offer states a deposit deadline. Only meaningful when
    *  deposit is required_*. */
-  deposit_deadline: "stated" | "absent";
+  deposit_deadline: "stated" | "absent" | DerivedCoverageState;
   /** stated_date = 完整 ISO 日期; stated_term_only = "2026 年秋" 这种; absent = 完全没提 */
-  term_start: "stated_date" | "stated_term_only" | "absent";
-  duration: "stated" | "absent";
-  accept_deadline: "stated" | "absent";
+  term_start:
+    | "stated_date"
+    | "stated_term_only"
+    | "absent"
+    | DerivedCoverageState;
+  duration: "stated" | "absent" | DerivedCoverageState;
+  accept_deadline: "stated" | "absent" | DerivedCoverageState;
 }
 
 export interface ExtractedOffer {

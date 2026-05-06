@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applySchoolNameOverride,
   computeInfoGaps,
+  enrichCoverage,
   inferDepositFromTuitionPercent,
   inheritDepositDeadline,
   recomputeAcceptDeadline,
@@ -732,6 +733,132 @@ describe("recomputeAcceptDeadline", () => {
     recomputeAcceptDeadline(offer);
     expect(offer.key_dates[0].date).toBe("2024-04-01"); // unchanged
     expect(offer.deadline_calculation?.confidence).toBe("missing_base");
+  });
+});
+
+describe("enrichCoverage", () => {
+  it("absent + value present → upgrades to rule_detected_but_missing (tuition)", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      fees: { tuition: { amount: 50000, currency: "USD" } },
+      coverage: { ...baseCoverage, tuition: "absent" },
+    };
+    enrichCoverage(offer);
+    expect(offer.coverage?.tuition).toBe("rule_detected_but_missing");
+  });
+
+  it("absent deposit + computed amount → upgrades to rule_detected_but_missing", () => {
+    // Real-world Imperial pattern: LLM coverage said deposit required_no_amount
+    // but didn't fill the structured field; inferDepositFromTuitionPercent
+    // filled it. Here we cover the simpler 'absent → rule_detected' case.
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      fees: { deposit: { amount: 3860, currency: "GBP" } },
+      coverage: { ...baseCoverage, deposit: "absent" },
+    };
+    enrichCoverage(offer);
+    expect(offer.coverage?.deposit).toBe("rule_detected_but_missing");
+  });
+
+  it("explicitly_none + amount present → conflict", () => {
+    // Genuine contradiction: LLM read "no deposit required" yet a deposit
+    // amount made it into fees. User should be alerted.
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      fees: { deposit: { amount: 1000, currency: "USD" } },
+      coverage: { ...baseCoverage, deposit: "explicitly_none" },
+    };
+    enrichCoverage(offer);
+    expect(offer.coverage?.deposit).toBe("conflict");
+  });
+
+  it("term_start absent + term_start_text filled → rule_detected_but_missing", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      term_start_text: "2024 年秋季",
+      coverage: { ...baseCoverage, term_start: "absent" },
+    };
+    enrichCoverage(offer);
+    expect(offer.coverage?.term_start).toBe("rule_detected_but_missing");
+  });
+
+  it("duration absent + duration filled → rule_detected_but_missing", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      duration: "1 年",
+      coverage: { ...baseCoverage, duration: "absent" },
+    };
+    enrichCoverage(offer);
+    expect(offer.coverage?.duration).toBe("rule_detected_but_missing");
+  });
+
+  it("accept_deadline absent + key_date present (e.g. recomputed) → rule_detected_but_missing", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+      coverage: { ...baseCoverage, accept_deadline: "absent" },
+    };
+    enrichCoverage(offer);
+    expect(offer.coverage?.accept_deadline).toBe("rule_detected_but_missing");
+  });
+
+  it("no coverage object → no-op (legacy offers)", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      fees: { tuition: { amount: 50000, currency: "USD" } },
+    };
+    enrichCoverage(offer);
+    expect(offer.coverage).toBeUndefined();
+  });
+
+  it("does NOT downgrade an already-stated coverage", () => {
+    // Negative: stated_full should stay stated_full even if extracted
+    // tuition exists. Only "absent" gets upgraded.
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [],
+      fees: { tuition: { amount: 50000, currency: "USD" } },
+      coverage: { ...baseCoverage, tuition: "stated_full" },
+    };
+    enrichCoverage(offer);
+    expect(offer.coverage?.tuition).toBe("stated_full");
+  });
+
+  it("info_gaps still suppress correctly when coverage is enriched", () => {
+    // Behavioral guarantee: post-enrichment, a tuition that was 'absent'
+    // but is now 'rule_detected_but_missing' should NOT trigger the
+    // tuition gap. computeInfoGapsFromCoverage's absent-only check
+    // continues to work.
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+      fees: { tuition: { amount: 50000, currency: "USD" } },
+      term_start_text: "2024 秋",
+      duration: "1 年",
+      coverage: { ...baseCoverage, tuition: "absent" },
+    };
+    enrichCoverage(offer);
+    expect(offer.coverage?.tuition).toBe("rule_detected_but_missing");
+    expect(computeInfoGaps(offer)).toEqual([]);
   });
 });
 

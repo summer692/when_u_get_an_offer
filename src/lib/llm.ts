@@ -1008,6 +1008,79 @@ export function applyAllPostProcessing(offer: ExtractedOffer): void {
   inheritDepositDeadline(offer);
   applySchoolNameOverride(offer);
   inferDepositFromTuitionPercent(offer);
+  // Coverage enrichment runs LAST — all the field-fillers above may have
+  // populated structured data that enrichCoverage uses to upgrade
+  // "absent" → "rule_detected_but_missing" or detect conflicts.
+  enrichCoverage(offer);
+}
+
+/**
+ * Cross-validate the LLM-emitted coverage against the structured fields
+ * (after every other post-processor has run). Upgrades misleading
+ * "absent" entries to "rule_detected_but_missing" when data is in fact
+ * present, and flags genuine contradictions as "conflict".
+ *
+ * Why: the LLM is occasionally inconsistent — it'll fill fees.deposit
+ * with an amount yet report coverage.deposit as "absent" (or vice
+ * versa). Without enrichment, downstream consumers (info_gaps, debug
+ * logs, future UI badges) can't tell apart "offer truly silent" from
+ * "LLM was contradictory". The enriched state is purely diagnostic
+ * here — computeInfoGaps already uses cross-validation for the gap
+ * decisions, so user-visible behavior is unchanged. The win is
+ * observability and a foundation the future source_quote validator
+ * can build on.
+ */
+export function enrichCoverage(offer: ExtractedOffer): void {
+  if (!offer.coverage) return;
+  const c = offer.coverage;
+
+  // Tuition
+  const t = offer.fees?.tuition;
+  const hasTuition = !!t && t.amount > 0;
+  if (c.tuition === "absent" && hasTuition) {
+    c.tuition = "rule_detected_but_missing";
+  }
+
+  // Deposit
+  const d = offer.fees?.deposit;
+  const hasDepositAmount = !!d && d.amount > 0;
+  if (c.deposit === "absent" && hasDepositAmount) {
+    c.deposit = "rule_detected_but_missing";
+  }
+  // Genuine contradiction: LLM said offer affirmatively says NO deposit,
+  // yet a deposit amount made it into fees. Surface as conflict.
+  if (c.deposit === "explicitly_none" && hasDepositAmount) {
+    c.deposit = "conflict";
+  }
+
+  // Deposit deadline
+  const hasDepositDeadlineKey = offer.key_dates?.some(
+    (k) => k.type === "deposit_deadline" && !!k.date,
+  );
+  if (c.deposit_deadline === "absent" && hasDepositDeadlineKey) {
+    c.deposit_deadline = "rule_detected_but_missing";
+  }
+
+  // Term start
+  const hasTermStart =
+    !!offer.term_start_text?.trim() ||
+    offer.key_dates?.some((k) => k.type === "term_start" && !!k.date);
+  if (c.term_start === "absent" && hasTermStart) {
+    c.term_start = "rule_detected_but_missing";
+  }
+
+  // Duration
+  if (c.duration === "absent" && offer.duration?.trim()) {
+    c.duration = "rule_detected_but_missing";
+  }
+
+  // Accept deadline
+  const hasAcceptDeadlineKey = offer.key_dates?.some(
+    (k) => k.type === "accept_deadline" && !!k.date,
+  );
+  if (c.accept_deadline === "absent" && hasAcceptDeadlineKey) {
+    c.accept_deadline = "rule_detected_but_missing";
+  }
 }
 
 /**
@@ -1285,27 +1358,45 @@ function normalizeCoverage(c: unknown): Coverage | undefined {
       ? (v as T)
       : ("absent" as T);
   };
+  // Derived states are accepted in the input so a stored (already-enriched)
+  // offer round-trips through normalize without losing its enriched state.
+  const derived = [
+    "rule_detected_but_missing",
+    "conflict",
+    "unsupported",
+  ] as const;
   return {
     tuition: pick("tuition", [
       "stated_full",
       "stated_partial",
       "stated_estimate",
       "absent",
+      ...derived,
     ] as const),
     deposit: pick("deposit", [
       "required_with_amount",
       "required_no_amount",
       "explicitly_none",
       "absent",
+      ...derived,
     ] as const),
-    deposit_deadline: pick("deposit_deadline", ["stated", "absent"] as const),
+    deposit_deadline: pick("deposit_deadline", [
+      "stated",
+      "absent",
+      ...derived,
+    ] as const),
     term_start: pick("term_start", [
       "stated_date",
       "stated_term_only",
       "absent",
+      ...derived,
     ] as const),
-    duration: pick("duration", ["stated", "absent"] as const),
-    accept_deadline: pick("accept_deadline", ["stated", "absent"] as const),
+    duration: pick("duration", ["stated", "absent", ...derived] as const),
+    accept_deadline: pick("accept_deadline", [
+      "stated",
+      "absent",
+      ...derived,
+    ] as const),
   };
 }
 
