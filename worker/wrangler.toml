@@ -1,0 +1,24 @@
+name = "offerlens-api"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+# Set with: wrangler secret put GEMINI_API_KEY
+# Set with: wrangler secret put TURNSTILE_SECRET_KEY
+# (Don't put real keys here — they'd leak via git.)
+
+[vars]
+# Default model. Override per environment if needed.
+GEMINI_MODEL = "gemini-2.5-flash-lite"
+# Per-IP daily request quota. 0 disables rate limiting.
+DAILY_LIMIT = "20"
+# Comma-separated list of allowed Origin headers, e.g.
+# "https://summer692.github.io,https://offerlens.example.com".
+# "*" allows any origin (dev only).
+ALLOWED_ORIGINS = "*"
+
+# KV binding for rate-limit counters.
+# Create with: wrangler kv:namespace create RATE_LIMIT
+# then paste the id below.
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT"
+# id = "REPLACE_WITH_KV_ID"
