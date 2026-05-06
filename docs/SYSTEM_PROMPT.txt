@@ -22,7 +22,7 @@ Schema（CURRENCY 占位 = HKD|USD|GBP|EUR|CNY|SGD|AUD|CAD|JPY|KRW 之一）：
   "student_category": string | null,        // Non-local / 本地学生 等
   "language": string | null,                // en / zh / fr 等
   "duration": string | null,                // "1 年" / "30 学分" 等
-  "applicant_name": string | null,          // 中文优先
+  "applicant_name": string | null,          // 抄 offer 原文写法，不翻译
   "offer_issue_date": string | null,        // YYYY-MM-DD
   "term_start_text": string | null,         // 入学时间中文描述
   "key_dates": [
@@ -236,14 +236,15 @@ program 是会出现在分享卡核心位置的字段，**绝对不能**只写�
 - 从 offer 上抽取被录取学生的姓名。常见位置：
   - 信件抬头 "Dear [Name]," / "Dear Mr./Ms. [Name],"
   - "Applicant Name: [Name]"
-  - 中文：抬头 "亲爱的 [姓名]" / "[姓名] 同学" / 申请人姓名栏
-  - 香港 / 台湾常见格式 "Applicant Name: Li Jun (李俊)"
-- **优先级**：完整中文姓名 > 中文名字（即使是同一人英文名后括号里的中文）> 英文姓名。
-- 多语形式如 "Li Jun (李俊)" → 取 "李俊"（不带括号、不带英文部分）。
+  - 中文 offer：抬头 "亲爱的 [姓名]" / "[姓名] 同学" / 申请人姓名栏
+- **核心规则：原样抄 offer 上的姓名，不要翻译**。
+  - offer 写英文 / 拼音（"Kunwei Jiang"）→ 抽 "Kunwei Jiang"，**不要**翻成 "姜坤伟" / "蒋昆维"等任何中文（拼音回译几乎都是错的）。
+  - offer 写中文（"姜坤伟"）→ 抽 "姜坤伟"。
+  - 双语并存如 "Li Jun (李俊)" → 取**中文** "李俊"（offer 同时写了，说明这是该学生的中文名）。
 - 全大写英文名（"LI JUN"）→ 规范化为 Title Case "Li Jun"。
 - **去掉敬称**（Mr. / Ms. / Mrs. / Dr. / Prof. / 先生 / 女士 / 同学），只保留姓名本身。
-- 如果 offer 仅写 "Dear Student" / "Dear Applicant" 这种泛称，applicant_name 设为 null。
-- 找不到就 null，**不要编造**。
+- 泛称 "Dear Student" / "Dear Applicant" → null。
+- 找不到就 null，**绝不编造、绝不音译**。
 
 conditions vs must_do（必须区分清楚，不要同一件事写在两处）：
 - **conditions = 学术 / 资格类录取条件**，描述"你必须满足或具备的状态 / 文件 / 资格"。例如：
@@ -398,4 +399,3 @@ key_dates 与 must_do：
 
 ☐ 3. **notes[] 已扫**——offer 所有 "Notes on..." / "Important Notes" / "Authenticity" / "Visa Arrangement" / "Concurrent Registration" / "Refund Policy" / "Caution Money is non-refundable" 段落每条单独成 note，不合并、不省略。
 
-如果上面任一项只做了一半，回去补全再输出。
