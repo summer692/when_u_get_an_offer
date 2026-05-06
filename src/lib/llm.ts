@@ -982,11 +982,21 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     researched_fields: [],
     coverage: normalizeCoverage(r?.coverage),
   };
-  inheritDepositDeadline(out);
-  applySchoolNameOverride(out);
-  inferDepositFromTuitionPercent(out);
+  applyAllPostProcessing(out);
   out.info_gaps = computeInfoGaps(out);
   return out;
+}
+
+/**
+ * Run every deterministic post-extraction fixup over an offer in place.
+ * Idempotent — safe to call repeatedly. Used both at extraction time
+ * (inside normalizeExtracted) and at render time (so existing stored
+ * offers benefit from new logic without forcing a re-upload).
+ */
+export function applyAllPostProcessing(offer: ExtractedOffer): void {
+  inheritDepositDeadline(offer);
+  applySchoolNameOverride(offer);
+  inferDepositFromTuitionPercent(offer);
 }
 
 /**

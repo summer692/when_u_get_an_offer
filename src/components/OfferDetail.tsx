@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Condition, Money, MustDo, Offer, Settings } from "../lib/schema";
 import { daysUntil, formatDaysLeft } from "../lib/countdown";
@@ -9,7 +9,7 @@ import { ALL_SECTIONS, ShareCard, type SectionId } from "./ShareCard";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MoneyEditor } from "./MoneyEditor";
 import { ExportPreview, type PreviewItem } from "./ExportPreview";
-import { pruneInfoGaps } from "../lib/llm";
+import { applyAllPostProcessing, pruneInfoGaps } from "../lib/llm";
 import {
   defaultShareVisible,
   hideAllEmptyFields,
@@ -34,7 +34,22 @@ interface Props {
   onUpdate: (offer: Offer) => Promise<void> | void;
 }
 
-export function OfferDetail({ offer, onBack, onDelete, onUpdate }: Props) {
+export function OfferDetail({
+  offer: rawOffer,
+  onBack,
+  onDelete,
+  onUpdate,
+}: Props) {
+  // Apply post-extraction fixups at render time too, not just at extraction
+  // time. Old offers stored before a fixup landed (e.g. school name
+  // override + prose replacement) get the corrected display without the
+  // user having to clear cache and re-upload. structuredClone keeps the
+  // mutation off the prop.
+  const offer = useMemo(() => {
+    const cloned = structuredClone(rawOffer);
+    applyAllPostProcessing(cloned);
+    return cloned;
+  }, [rawOffer]);
   // One ref per export page — each ShareCard renders a fixed 720×1280 frame
   // (which html-to-image scales 1.5× to a 1080×1920 PNG). Multi-page mode
   // produces independent PNGs, not one tall image.
