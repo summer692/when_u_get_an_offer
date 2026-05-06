@@ -64,7 +64,7 @@ Schema:
     "duration":         "stated" | "absent",
     "accept_deadline":  "stated" | "absent"
   },
-  "summary": string                         // 250-350 字中文叙事（详见下方"叙事解读"段落）
+  "summary": string                         // 500-800 字中文叙事（详见下方"叙事解读"段落）
 }
 
 叙事解读 (summary) - 必填，最重要的兜底字段:
@@ -218,7 +218,7 @@ program 是会出现在分享卡核心位置的字段，**绝对不能**只写�
 
 4. program_zh **必须**包含学位中文：硕士 / 博士 / 学士 / 工程硕士 / 工商管理硕士 等。**不接受**只写"公共政策"、"计算机科学"——必须是"公共政策硕士"、"计算机科学理学硕士"。
 
-5. 如果整份 offer 上**确实只能找到**裸专业名（极罕见，比如某些非正式 acceptance letter），保留裸名 + 在 info_gaps 加一句"专业名缺学位类型，建议查 [学校] 官网项目页确认"——后续 research 步骤会去补全。
+5. 如果整份 offer 上**确实只能找到**裸专业名（极罕见，比如某些非正式 acceptance letter），保留裸名——后续 research 步骤会去补全。**不要**往 info_gaps 写任何东西（info_gaps 由后端反推）。
 
 **反例校正**（offer 上各处都没明说时不要硬猜，但只要任何一处提到学位类型就必须用上）：
 
@@ -363,7 +363,7 @@ conditions vs must_do（必须区分清楚，不要同一件事写在两处）�
   · "JP¥" / "Japanese Yen" / "日元" / "日円" → JPY
   · "₩" / "Korean Won" / "韩元" / "韩币" / "원" → KRW
 - "$" 单独出现时**必须**根据上下文判断（offer 学校所在国 / 文档其它地方的国家代码 / 抬头）：美国学校 → USD；港校 → HKD；澳校 → AUD；加校 → CAD；新校 → SGD。判断不出来时**优先用学校所在地**的币种。
-- 如果 offer 上的币种**完全不在**上述 10 个里（极罕见，比如瑞士法郎、瑞典克朗），把 currency 字段设为 null（不要硬塞一个最近的代码），并在 info_gaps 里加一句"币种 [原文] 不在常见 10 种之内，请人工确认"。
+- 如果 offer 上的币种**完全不在**上述 10 个里（极罕见，比如瑞士法郎、瑞典克朗），把 currency 字段设为 null（不要硬塞一个最近的代码）。不要往 info_gaps 写——info_gaps 由后端反推。
 
 学费抽取（**严格按以下优先级**，从高到低）：
 
@@ -376,20 +376,14 @@ conditions vs must_do（必须区分清楚，不要同一件事写在两处）�
 - 例子 2： "Programme Fee: USD 80,000 in total" → amount = 80000, period = "total", is_estimate = false
 - 例子 3： "学费总额：人民币 38 万元" → amount = 380000, currency = "CNY", period = "total", is_estimate = false
 
-优先级 2 — offer 上**明确写**"按学分单价 + 项目总学分"，**且单价不在 Debit Note / 首期账单注释里** → 自己相乘，is_estimate=true：
-- 例子："Tuition: HK$13,600 per credit, 84 credits in total"（写在项目费用总览段落里）
-  → amount = 84 × 13600 = 1142400, is_estimate = true, note = "84 学分 × HK$13,600（依据 offer 估算）"
+优先级 2 — offer 只给"按学分单价 + 总学分"或"首期 / 单学期 / 单学分金额"，没有项目总额数字 → tuition = null（**不要自己相乘**），coverage.tuition 据情况标 stated_partial，让后续研究步骤或后处理去补全。
 
-优先级 3 — offer 上的学费**仅来自 Debit Note / 首期账单 / 单学期金额** → tuition = null，让研究步骤补全：
-- 例子（PolyU 那种）："Note on Tuition Fee: this debit note is calculated as 12 credits × HK$8,500/credit"
-  → tuition = null, info_gaps 加一条 "学费仅显示首期账单折算价，请到学校官网查询正式费率"
+优先级 3 — offer 完全没提学费 → tuition = null，coverage.tuition = "absent"。
 
-优先级 4 — offer 完全没提学费 → tuition = null + info_gaps "学费未在 offer 上明确列出，请到 [学校] 官网查询"。
-
-**关键判断技巧（防止把优先级 1 误判成 3）**：
+**关键判断技巧（防止把优先级 1 误判成 2）**：
 - "分期付款 / instalment / 三期支付 / spread over X payments" = 付款方式说明，**不影响**总额真实性。
 - "Debit Note 1: 12 credits × $X" / "Note on Tuition Fee" 注释段 = **首期账单临时折算价**，不可靠。
-- 区分点：数字**前后是否给出了"项目总额"**？给了就是优先级 1；只有按学分单价、首期金额，没有总额数字，才是优先级 3。
+- 区分点：数字**前后是否给出了"项目总额"**？给了就是优先级 1；只有按学分单价、首期金额，没有总额数字，才是优先级 2。
 - 优先级 1 是最常见也最高优先的情况。当 offer 同时给"总额 + 分期"，**永远选总额**，绝不要把它判成 null。
 
 留位费 / Caution Money（沿用之前规则）：
@@ -407,7 +401,7 @@ fees.deposit 的语义（沿用之前规则）：
   (b) notes[] 里加一条 "已缴留位费一律不退还也不可转让，除非未能满足录取条件"
 - 学生第一次看 offer 时会以为留位费可以退（因为字面上是"押金"），所以这条警告**绝对不能省略**。即使 offer 只是简短一笔带过，也要忠实保留。
 
-（学费计算规则见上方"学费计算"段；新版本不再做自动相乘，未明确列出总学费时直接 tuition=null + info_gaps + 等研究步骤）
+（不再做自动相乘：未明确列出总学费时直接 tuition=null，coverage.tuition 标 stated_partial / absent，后端从 coverage 反推核实项。）
 
 学费仍然不完整时（is_partial = true）：
 - 只有在 offer 上的学费数字是"首期 / 单学期 / 单学分 / 一部分付款"，并且**也无法从 offer 自身算出总额**时，才把它放到 tuition 并设 is_partial = true。
@@ -485,6 +479,10 @@ key_dates 与 must_do：
 
 ☐ 11. action / item 文本里**没有**填充语 ("在指定时间内" / "按规定时间" / "by the prescribed time")。
 
-☐ 12. **summary 已写、达到 250-350 字、且把上面 conditions / must_do / notes 任何字段会漏掉的细节都补进去了**——如果只有 conditions 列表能告诉学生这份 offer 的全部，就不需要 summary；现在需要 summary 是因为它要兜住所有结构化字段塞不下的内容。光抽好结构化字段、summary 写两句客套话 = 严重错误。
+☐ 12. **summary 已写、达到 500-800 字、且覆盖关键 conditions / must_do / notes 的细节**——summary 是给中介复制粘贴发给学生的工作产物，必须 self-contained。光抽好结构化字段、summary 写两句客套话 = 严重错误。
 
-如果以上任何一项你只做了一半（例如填了 conditions 但没填 details，或抽了部分 notes 但漏了"不退款"和"Concurrent Registration"），那就回去补全再输出。
+如果以上任何一项你只做了一半（例如填了 conditions 但没填 details，或抽了部分 notes 但漏了"不退款"和"Concurrent Registration"），那就回去补全再输出。`;
+
+export interface ExtractOptions {
+  apiKey: string;
+  provider?: Provider;
