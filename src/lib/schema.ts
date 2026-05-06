@@ -59,6 +59,31 @@ export interface MustDo {
   priority: "high" | "medium" | "low";
 }
 
+/**
+ * Provenance for the acceptance deadline. Captures whether we re-derived
+ * it deterministically (good) or had to fall back to the LLM's value
+ * because we couldn't (less good). Stored on the offer so the UI / debug
+ * log can show *why* a date is the date.
+ */
+export interface DeadlineCalculation {
+  /** Date we offset from. ISO YYYY-MM-DD or null. */
+  base_date: string | null;
+  /** Where the base date came from. */
+  base_source: "offer_issue_date" | "accept_deadline" | "text_anchor" | null;
+  /** Numeric offset, e.g. 28. */
+  offset_value: number | null;
+  /** Unit of the offset, normalized. */
+  offset_unit: "days" | "weeks" | null;
+  /** What we computed. ISO YYYY-MM-DD. May differ from the LLM's
+   * key_dates entry — when so, the key_dates entry is overridden. */
+  computed_date: string | null;
+  /** Why we trust (or don't) the computed_date.
+   * - "computed": math was clean, accept_deadline now reflects this
+   * - "missing_base": found an offset phrase but no base date → no override
+   * - "ambiguous": multiple offset phrases or non-calendar units → no override */
+  confidence: "computed" | "missing_base" | "ambiguous";
+}
+
 export type CoverageStatus =
   | "stated_full"
   | "stated_partial"
@@ -163,6 +188,13 @@ export interface ExtractedOffer {
    * each topic, not what we managed to extract). Drives info_gaps without
    * us having to infer "did the offer mention X" from output shape. */
   coverage?: Coverage;
+  /** Date the offer letter was issued, ISO YYYY-MM-DD. Used as the base
+   * for deterministic deadline arithmetic (so we don't trust the LLM
+   * to do the addition itself). */
+  offer_issue_date?: string;
+  /** Provenance + result of the deterministic acceptance-deadline
+   * recomputation. Set by recomputeAcceptDeadline. */
+  deadline_calculation?: DeadlineCalculation;
 }
 
 export interface Offer extends ExtractedOffer {

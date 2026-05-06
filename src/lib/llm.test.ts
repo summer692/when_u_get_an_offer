@@ -4,6 +4,7 @@ import {
   computeInfoGaps,
   inferDepositFromTuitionPercent,
   inheritDepositDeadline,
+  recomputeAcceptDeadline,
 } from "./llm";
 import type { Coverage, ExtractedOffer } from "./schema";
 
@@ -573,6 +574,164 @@ describe("inferDepositFromTuitionPercent", () => {
     };
     inferDepositFromTuitionPercent(offer);
     expect(offer.fees?.deposit).toBeUndefined();
+  });
+});
+
+describe("recomputeAcceptDeadline", () => {
+  it("Imperial Gemini case: '28 calendar days' from 2022-11-26 = 2022-12-24", () => {
+    const offer: ExtractedOffer = {
+      school: "Imperial",
+      program: "MSc",
+      offer_issue_date: "2022-11-26",
+      key_dates: [
+        { type: "accept_deadline", date: "2022-12-24", label: "" },
+      ],
+      summary:
+        "You must accept this offer within 28 calendar days of the date of this offer.",
+    };
+    recomputeAcceptDeadline(offer);
+    expect(offer.key_dates[0].date).toBe("2022-12-24");
+    expect(offer.deadline_calculation?.confidence).toBe("computed");
+    expect(offer.deadline_calculation?.computed_date).toBe("2022-12-24");
+    expect(offer.deadline_calculation?.offset_value).toBe(28);
+  });
+
+  it("Imperial 智谱 wrong-date case: overrides LLM's 12-14 with computed 12-24", () => {
+    // Real-world bug. LLM produced 2022-12-14 (off by 10 days).
+    const offer: ExtractedOffer = {
+      school: "Imperial",
+      program: "MSc",
+      offer_issue_date: "2022-11-26",
+      key_dates: [
+        { type: "accept_deadline", date: "2022-12-14", label: "" },
+      ],
+      must_do: [
+        {
+          action: "在 28 天内通过 Imperial Gateway 账户接受录取",
+          priority: "high",
+        },
+      ],
+    };
+    recomputeAcceptDeadline(offer);
+    expect(offer.key_dates[0].date).toBe("2022-12-24");
+    expect(offer.deadline_calculation?.confidence).toBe("computed");
+  });
+
+  it("'within 4 weeks' = 28 days", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      offer_issue_date: "2024-01-01",
+      key_dates: [],
+      summary: "Please reply within 4 weeks of this offer to accept.",
+    };
+    recomputeAcceptDeadline(offer);
+    expect(offer.deadline_calculation?.computed_date).toBe("2024-01-29");
+    expect(offer.deadline_calculation?.offset_unit).toBe("weeks");
+  });
+
+  it("missing offer_issue_date → confidence missing_base, no override", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+      summary: "Reply within 28 days of this offer to accept.",
+    };
+    recomputeAcceptDeadline(offer);
+    expect(offer.key_dates[0].date).toBe("2024-04-01"); // unchanged
+    expect(offer.deadline_calculation?.confidence).toBe("missing_base");
+    expect(offer.deadline_calculation?.offset_value).toBe(28);
+  });
+
+  it("'business days' offset → ambiguous, no override", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      offer_issue_date: "2024-01-01",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-01-30", label: "" },
+      ],
+      summary: "Please respond within 14 business days to accept your offer.",
+    };
+    recomputeAcceptDeadline(offer);
+    expect(offer.key_dates[0].date).toBe("2024-01-30"); // unchanged
+    expect(offer.deadline_calculation?.confidence).toBe("ambiguous");
+  });
+
+  it("'工作日' offset → ambiguous, no override", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      offer_issue_date: "2024-01-01",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-01-30", label: "" },
+      ],
+      summary: "请在 14 个工作日内接受录取。",
+    };
+    recomputeAcceptDeadline(offer);
+    expect(offer.key_dates[0].date).toBe("2024-01-30"); // unchanged
+    expect(offer.deadline_calculation?.confidence).toBe("ambiguous");
+  });
+
+  it("Chinese '28 天内' phrasing", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      offer_issue_date: "2024-01-01",
+      key_dates: [],
+      summary: "请在 28 天内回复以接受录取。",
+    };
+    recomputeAcceptDeadline(offer);
+    expect(offer.deadline_calculation?.computed_date).toBe("2024-01-29");
+  });
+
+  it("hardcoded date with no relative phrase → no compute, no override", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      offer_issue_date: "2024-01-01",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+      summary: "Please accept by 1 April 2024.",
+    };
+    recomputeAcceptDeadline(offer);
+    expect(offer.key_dates[0].date).toBe("2024-04-01"); // unchanged
+    expect(offer.deadline_calculation).toBeUndefined();
+  });
+
+  it("non-acceptance '28 days' phrase (e.g. visa) is ignored", () => {
+    // Negative: don't hijack '28 days' from a sentence about visa,
+    // notice period, etc. Only acceptance-related sentences count.
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      offer_issue_date: "2024-01-01",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+      summary:
+        "ATAS clearance application takes 28 working days. Visa processing 28 days. Please accept by 1 April 2024.",
+    };
+    recomputeAcceptDeadline(offer);
+    expect(offer.key_dates[0].date).toBe("2024-04-01"); // unchanged
+  });
+
+  it("invalid offer_issue_date (e.g. 1900) → treated as missing_base", () => {
+    const offer: ExtractedOffer = {
+      school: "Test",
+      program: "MSc",
+      offer_issue_date: "1900-01-01",
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+      summary: "Reply within 28 days of this offer.",
+    };
+    recomputeAcceptDeadline(offer);
+    expect(offer.key_dates[0].date).toBe("2024-04-01"); // unchanged
+    expect(offer.deadline_calculation?.confidence).toBe("missing_base");
   });
 });
 

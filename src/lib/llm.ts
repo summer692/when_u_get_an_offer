@@ -149,6 +149,7 @@ Schema:
   "language": string | null,                // offer 原文语言（如 "en", "zh", "fr"）
   "duration": string | null,                // 项目时长，如 "1 年" / "1.5 年" / "2 年" / "30 学分"
   "applicant_name": string | null,          // 录取人姓名（"Dear X" / "Applicant Name: X" / "亲爱的 X"），中文优先
+  "offer_issue_date": string | null,        // offer 信件发出日期，归一到 YYYY-MM-DD（找不到就 null）
   "term_start_text": string | null,         // 入学时间的中文描述（即使无具体日期，也要写学期+学年）
   "key_dates": [
     {
@@ -247,6 +248,11 @@ Wang Chenchen 同学，恭喜你获得香港大学 (The University of Hong Kong)
 \`\`\`
 
 - 写完后**自检一遍**：把这段文字直接复制粘贴发给学生家长，他们能不能据此独立完成所有该做的事？做不到就回去补。
+
+offer 发出日期 (offer_issue_date) - 重要:
+- offer 信件抬头 / 落款 / 信头通常会有发信日期，常见标识：Date / Issued / Date of Issue / Letter Date / 信发日期 / 录取日期 / 出具日期。归一到 YYYY-MM-DD。
+- 这个字段**不是**让你做计算，只是把 offer 上看到的"今天"日期抄下来。后端会拿它跟"within X days" 这种相对时间结合**自己算** acceptance deadline，不要你算。
+- 如果完全找不到发出日期，留 null。**不要猜**、不要拿其他日期（开学日 / 截止日）顶替。
 
 入学时间 (term_start_text) - 必填:
 - offer 上能看到的最具体的入学时间描述。优先级：**具体日期 > 学期+学年 > 仅学年**。
@@ -623,7 +629,7 @@ export interface ExtractOptions {
  * a new prompt immediately without manually clearing storage. Bump whenever
  * SYSTEM_PROMPT changes in a way that would yield a meaningfully different
  * output (new field, stricter rules, etc.). */
-export const PROMPT_VERSION = "v10-coverage-map";
+export const PROMPT_VERSION = "v11-deadline-calc";
 
 /** Build the L2 (extraction) cache key. Includes the provider + model so
  * different LLM combos don't share — picking a different provider should
@@ -936,6 +942,10 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
     language: r?.language ?? undefined,
     duration: r?.duration ?? undefined,
     applicant_name: r?.applicant_name ?? undefined,
+    offer_issue_date:
+      typeof r?.offer_issue_date === "string" && r!.offer_issue_date.trim()
+        ? r!.offer_issue_date.trim()
+        : undefined,
     faculty: r?.faculty ?? undefined,
     faculty_zh: r?.faculty_zh ?? undefined,
     student_category: r?.student_category ?? undefined,
@@ -994,9 +1004,155 @@ function normalizeExtracted(raw: unknown): ExtractedOffer {
  * offers benefit from new logic without forcing a re-upload).
  */
 export function applyAllPostProcessing(offer: ExtractedOffer): void {
+  recomputeAcceptDeadline(offer);
   inheritDepositDeadline(offer);
   applySchoolNameOverride(offer);
   inferDepositFromTuitionPercent(offer);
+}
+
+/**
+ * Re-derive the acceptance deadline by code rather than trusting the
+ * LLM's arithmetic. Triggered when the offer text contains a relative
+ * phrase ("within 28 calendar days", "28 天内", "within 4 weeks") and
+ * we have an offer_issue_date to offset from.
+ *
+ * Why: even good LLMs occasionally miscount days; weak ones (智谱
+ * GLM-4.6V-Flash) routinely do. A real Imperial offer dated 26 Nov
+ * 2022 with "within 28 calendar days" should resolve to 24 Dec, but
+ * 智谱 returned 14 Dec (off by 10).
+ *
+ * Conservative rules:
+ * - Only override key_dates.accept_deadline when we can compute with
+ *   a known base + a calendar-unit offset (days/weeks). For business
+ *   days, working days, or no base date, we record the gap in
+ *   deadline_calculation.confidence and leave the LLM's value alone.
+ * - Search is scoped to acceptance-related sentences so a stray
+ *   "28 days notice" elsewhere in the offer doesn't hijack things.
+ */
+export function recomputeAcceptDeadline(offer: ExtractedOffer): void {
+  const blob = [
+    offer.summary ?? "",
+    ...(offer.notes ?? []),
+    ...(offer.raw_highlights ?? []),
+    ...(offer.conditions ?? []).flatMap((c) => [c.item ?? "", c.details ?? ""]),
+    ...(offer.must_do ?? []).flatMap((m) => [m.action ?? "", m.details ?? ""]),
+  ].join("\n");
+
+  const offset = findAcceptOffset(blob);
+  if (!offset) return;
+
+  // If the offset is in business / working days, we can't compute
+  // calendar dates without knowing the offer's locale holidays. Bail.
+  if (offset.businessDays) {
+    offer.deadline_calculation = {
+      base_date: null,
+      base_source: null,
+      offset_value: offset.value,
+      offset_unit: offset.unit,
+      computed_date: null,
+      confidence: "ambiguous",
+    };
+    return;
+  }
+
+  const base = offer.offer_issue_date;
+  if (!base || !isValidIsoDate(base)) {
+    offer.deadline_calculation = {
+      base_date: null,
+      base_source: null,
+      offset_value: offset.value,
+      offset_unit: offset.unit,
+      computed_date: null,
+      confidence: "missing_base",
+    };
+    return;
+  }
+
+  const days = offset.unit === "weeks" ? offset.value * 7 : offset.value;
+  const computed = addCalendarDays(base, days);
+
+  // Override the accept_deadline key_date if it differs from our compute.
+  const existing = offer.key_dates?.find((k) => k.type === "accept_deadline");
+  if (existing) {
+    if (existing.date !== computed) existing.date = computed;
+  } else {
+    offer.key_dates = [
+      ...(offer.key_dates ?? []),
+      { type: "accept_deadline", date: computed, label: "接受录取截止日期" },
+    ];
+  }
+
+  offer.deadline_calculation = {
+    base_date: base,
+    base_source: "offer_issue_date",
+    offset_value: offset.value,
+    offset_unit: offset.unit,
+    computed_date: computed,
+    confidence: "computed",
+  };
+}
+
+interface AcceptOffset {
+  value: number;
+  unit: "days" | "weeks";
+  businessDays: boolean;
+}
+
+/**
+ * Look for a relative-time phrase ("within N days/weeks", "N 天内")
+ * inside an acceptance-related sentence. Returns null if nothing found.
+ */
+function findAcceptOffset(blob: string): AcceptOffset | null {
+  const sentences = blob.split(/[。\n;]|\.(?=\s|$)/);
+  for (const s of sentences) {
+    if (!isAcceptanceSentence(s)) continue;
+    // English: within N (calendar|business|working)? (day|week)s?
+    const en = s.match(
+      /within\s+(\d+)\s*(calendar|business|working)?\s*(day|week)s?/i,
+    );
+    if (en) {
+      const value = parseInt(en[1], 10);
+      const unit = en[3].toLowerCase() === "week" ? "weeks" : "days";
+      const qualifier = (en[2] ?? "").toLowerCase();
+      const businessDays =
+        qualifier === "business" || qualifier === "working";
+      if (value > 0 && value <= 365) {
+        return { value, unit, businessDays };
+      }
+    }
+    // Chinese: N (个)? (工作)? (日历日|天|日|周) 内
+    const zh = s.match(/(\d+)\s*(个)?\s*(工作)?\s*(日历日|天|日|周)\s*内/);
+    if (zh) {
+      const value = parseInt(zh[1], 10);
+      const unitChar = zh[4];
+      const unit: "days" | "weeks" = unitChar === "周" ? "weeks" : "days";
+      const businessDays = !!zh[3]; // "工作"
+      if (value > 0 && value <= 365) {
+        return { value, unit, businessDays };
+      }
+    }
+  }
+  return null;
+}
+
+function isAcceptanceSentence(s: string): boolean {
+  return /accept|response|reply|reply\s*to|respond|录取|回复|接受|确认|回应/i.test(
+    s,
+  );
+}
+
+function addCalendarDays(iso: string, days: number): string {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function isValidIsoDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + "T00:00:00Z");
+  if (isNaN(d.getTime())) return false;
+  const year = d.getUTCFullYear();
+  return year >= 1990 && year <= 2100;
 }
 
 /**
