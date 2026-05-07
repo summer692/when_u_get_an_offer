@@ -1,5 +1,5 @@
 /**
- * OfferLens proxy Worker.
+ * Yesletter proxy Worker.
  *
  * Holds the Gemini API key server-side so the frontend doesn't ship it.
  * Each request:

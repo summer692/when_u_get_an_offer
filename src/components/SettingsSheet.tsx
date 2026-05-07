@@ -93,7 +93,7 @@ export function SettingsSheet({ open, onClose }: Props) {
       setClearStatus("done");
       setTimeout(() => setClearStatus("idle"), 2400);
     } catch (err) {
-      console.error("[OfferLens] clearAllCaches failed", err);
+      console.error("[Yesletter] clearAllCaches failed", err);
       setClearStatus("idle");
     }
   }
@@ -146,7 +146,7 @@ export function SettingsSheet({ open, onClose }: Props) {
         setSetting("model", model.trim() || PROVIDERS[provider].defaultModel),
       ]);
     } catch (err) {
-      console.error("[OfferLens] failed to persist settings", err);
+      console.error("[Yesletter] failed to persist settings", err);
     }
   }
 
@@ -172,7 +172,7 @@ export function SettingsSheet({ open, onClose }: Props) {
         {isEmbeddedMode() ? (
           <div className="space-y-2 text-sm text-ink-700 dark:text-ink-300">
             <p>
-              你不需要配置 API Key —— OfferLens 已经为你接入 AI 模型。
+              你不需要配置 API Key —— Yesletter 已经为你接入 AI 模型。
             </p>
             <p className="text-xs text-ink-500">
               抽取走我们自己的服务（Cloudflare Worker → Gemini）。每天有限额，被刷爆时请稍后再试。
@@ -247,7 +247,7 @@ export function SettingsSheet({ open, onClose }: Props) {
         <div className="mt-10 pt-8 border-t border-ink-100 dark:border-ink-700">
           <div className="section-label mb-3">本地缓存</div>
           <div className="text-xs text-ink-500 leading-relaxed mb-4">
-            为了节省 token、加快重复上传，OfferLens 会在本地保留已经处理过的
+            为了节省 token、加快重复上传，Yesletter 会在本地保留已经处理过的
             offer 数据（最多 100 条 / 类型，30 天后自动失效）。完全保存在你
             的浏览器里，不会上传。
           </div>

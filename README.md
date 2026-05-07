@@ -1,49 +1,39 @@
-# OfferLens
+# Yesletter
 
 > 你的 offer，一眼看清。
 
 上传学校录取通知（PDF / 图片 / DOCX / 邮件正文），自动抽取学校、关键日期、费用、必做事项，在仪表盘里倒计时显示。
 
-## 特性
+## 架构
 
-- **任意语言 offer** — 多模态 LLM 原生识别，不受语种限制
-- **本地优先** — 文件解析与数据都只在浏览器里（IndexedDB），不上传服务器
-- **响应式** — 桌面 + 移动端同样好用
-- **浅色 / 深色 / 跟随系统** — 三种主题
-- **OpenRouter 统一入口** — 默认 Gemini 2.5 Flash 免费层，一键切换 Claude Haiku / GPT-4o mini 等
+- **前端** Vite + React 18 + TypeScript（GitHub Pages / Cloudflare Pages 静态托管）
+- **后端** Cloudflare Worker（仓库内 `worker/`，holds Gemini API key + 验证 Turnstile + IP 限流）
+- **LLM** Google Gemini 2.5 Flash-Lite（多模态，处理图片 / PDF / 文本）
+- **本地存储** IndexedDB（offer 数据 + L2/L3 缓存）
 
-## 使用
+## 本地开发
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-打开 http://localhost:5173，点击右上角「设置」填入你的 [OpenRouter API Key](https://openrouter.ai/keys)，即可开始上传 offer。
+打开 http://localhost:5173。如果没设 `VITE_API_BASE`，前端会回退到 BYOK 模式（用户填自己的 API key）；设了就走 Worker。
 
-## 技术栈
+复制 `.env.example` 到 `.env.local` 配置。
 
-- Vite + React 18 + TypeScript
-- Tailwind CSS（Apple 风设计系统）
-- `pdfjs-dist` 解析 PDF · `mammoth` 解析 DOCX
-- `idb` 封装 IndexedDB
-- OpenRouter Chat Completions API（OpenAI 兼容协议）
+## Worker 部署
 
-## 目录结构
+见 `worker/README.md`——一次性配好 Cloudflare 账户、Turnstile、Gemini 付费 tier、KV 限流。
 
-```
-src/
-  lib/          # 纯逻辑：schema / db / parsers / llm / countdown / format
-  hooks/        # useOffers, useTheme
-  components/   # Hero, Dashboard, OfferCard, OfferDetail, SettingsSheet, ...
-  App.tsx       # 路由与状态编排
-  main.tsx      # 入口
+## 测试
+
+```bash
+pnpm test       # vitest 单元测试，覆盖 deterministic 后处理逻辑
+pnpm typecheck
+pnpm build
 ```
 
-## Roadmap（MVP 之后）
+## 协作准则
 
-- 多 offer 横向对比表
-- `.ics` 日历导出、邮件/推送提醒
-- 可选账号 + 云端同步
-- 多语言界面（i18n）
-- 原文 PDF 云端保存
+见 `CLAUDE.md`。核心：永远不要猜外部事实，结构化修复 > 个案补丁。

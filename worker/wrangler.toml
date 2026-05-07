@@ -1,4 +1,4 @@
-name = "offerlens-api"
+name = "yesletter-api"
 main = "src/index.ts"
 compatibility_date = "2026-01-01"
 
@@ -12,7 +12,7 @@ GEMINI_MODEL = "gemini-2.5-flash-lite"
 # Per-IP daily request quota. 0 disables rate limiting.
 DAILY_LIMIT = "20"
 # Comma-separated list of allowed Origin headers, e.g.
-# "https://summer692.github.io,https://offerlens.example.com".
+# "https://summer692.github.io,https://yesletter.org".
 # "*" allows any origin (dev only).
 ALLOWED_ORIGINS = "*"
 

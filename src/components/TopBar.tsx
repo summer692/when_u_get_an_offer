@@ -39,7 +39,7 @@ export function TopBar({ onOpenSettings }: Props) {
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2 font-display font-medium text-base tracking-tight">
             <span>◉</span>
-            <span>OfferLens</span>
+            <span>Yesletter</span>
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -57,7 +57,7 @@ export function TopBar({ onOpenSettings }: Props) {
                 <BrandIcon />
               )}
               <span className="hidden sm:inline tracking-wide">
-                {agencyName || "OfferLens"}
+                {agencyName || "Yesletter"}
               </span>
             </button>
             <button

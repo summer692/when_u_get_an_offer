@@ -1,8 +1,8 @@
-# OfferLens proxy Worker
+# Yesletter proxy Worker
 
 Cloudflare Worker that holds the Gemini API key server-side, validates
 Cloudflare Turnstile, rate-limits per IP, and proxies extraction requests
-from the OfferLens frontend.
+from the Yesletter frontend.
 
 ## One-time setup
 
@@ -39,7 +39,7 @@ from the OfferLens frontend.
    ```
 
    Wrangler will print the deployed URL, something like
-   `https://offerlens-api.your-account.workers.dev`. Configure the
+   `https://yesletter-api.your-account.workers.dev`. Configure the
    frontend `VITE_API_BASE` to point at it.
 
 ## Local development
