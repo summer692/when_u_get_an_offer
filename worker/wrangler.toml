@@ -2,13 +2,17 @@ name = "yesletter-api"
 main = "src/index.ts"
 compatibility_date = "2026-01-01"
 
-# Set with: wrangler secret put GEMINI_API_KEY
+# Set with: wrangler secret put LLM_API_KEY
 # Set with: wrangler secret put TURNSTILE_SECRET_KEY
 # (Don't put real keys here — they'd leak via git.)
 
 [vars]
-# Default model. Override per environment if needed.
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+# Upstream OpenAI-compatible service.
+# Default: gptsapi.net (HK reseller, accepts CNY).
+# Alternative: https://generativelanguage.googleapis.com/v1beta/openai
+LLM_BASE_URL = "https://api.gptsapi.net"
+# Default model id. Frontend may override but only with a whitelisted name.
+LLM_MODEL = "gemini-2.5-flash-lite"
 # Per-IP daily request quota. 0 disables rate limiting.
 DAILY_LIMIT = "20"
 # Comma-separated list of allowed Origin headers, e.g.

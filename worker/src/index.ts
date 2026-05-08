@@ -1,11 +1,16 @@
 /**
- * Yesletter proxy Worker.
+ * YesLetter proxy Worker.
  *
- * Holds the Gemini API key server-side so the frontend doesn't ship it.
+ * Holds the upstream API key server-side so the frontend doesn't ship it.
  * Each request:
  *   1. Validates Cloudflare Turnstile token (anti-bot)
  *   2. Checks per-IP daily quota in KV (anti-abuse)
- *   3. Forwards the prompt to Gemini, streams response back
+ *   3. Forwards the prompt to the configured upstream LLM, returns response
+ *
+ * Default upstream is gptsapi.net (Hong Kong reseller, accepts CNY).
+ * Switch to Google's official endpoint by setting LLM_BASE_URL in
+ * wrangler.toml; everything else stays the same as long as the upstream
+ * exposes an OpenAI-compatible /chat/completions endpoint.
  *
  * Frontend posts to POST /api/extract
  *   body: {
@@ -17,12 +22,18 @@
 
 import { verifyTurnstile } from "./turnstile";
 import { checkAndIncrementQuota } from "./rateLimit";
-import { callGemini } from "./gemini";
+import { callLLM } from "./gemini";
 
 export interface Env {
-  GEMINI_API_KEY: string;
+  /** OpenAI-compatible API key for the configured upstream. */
+  LLM_API_KEY: string;
+  /** Base URL of the upstream OpenAI-compatible service.
+   *  Default: https://api.gptsapi.net (gptsapi.net Gemini reseller)
+   *  Alternative: https://generativelanguage.googleapis.com/v1beta/openai */
+  LLM_BASE_URL: string;
+  /** Default model id (e.g. gemini-2.5-flash-lite). Frontend may override. */
+  LLM_MODEL: string;
   TURNSTILE_SECRET_KEY: string;
-  GEMINI_MODEL: string;
   DAILY_LIMIT: string;
   ALLOWED_ORIGINS: string;
   RATE_LIMIT?: KVNamespace;
@@ -82,17 +93,22 @@ export default {
     const model =
       body.model && ALLOWED_MODELS.has(body.model)
         ? body.model
-        : env.GEMINI_MODEL;
+        : env.LLM_MODEL;
 
     try {
-      const result = await callGemini(env.GEMINI_API_KEY, model, body.messages);
+      const result = await callLLM(
+        env.LLM_BASE_URL,
+        env.LLM_API_KEY,
+        model,
+        body.messages,
+      );
       return new Response(JSON.stringify(result), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return jsonError(502, `gemini upstream failed: ${message}`, corsHeaders);
+      return jsonError(502, `LLM upstream failed: ${message}`, corsHeaders);
     }
   },
 };

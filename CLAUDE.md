@@ -1,4 +1,4 @@
-# Yesletter — 协作准则
+# YesLetter — 协作准则
 
 ## 永远不要猜
 

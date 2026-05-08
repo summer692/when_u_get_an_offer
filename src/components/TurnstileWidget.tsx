@@ -95,7 +95,7 @@ export function TurnstileWidget({ resetCounter, onToken }: Props) {
         });
       })
       .catch((err) => {
-        console.error("[Yesletter] Turnstile init failed", err);
+        console.error("[YesLetter] Turnstile init failed", err);
         setError("人机验证组件加载失败，请检查网络后刷新页面");
       });
     return () => {

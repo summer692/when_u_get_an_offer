@@ -57,7 +57,7 @@ export const PROVIDERS: Record<Provider, ProviderConfig> = {
     defaultModel: "google/gemini-2.5-flash",
     extraHeaders: () => ({
       "HTTP-Referer": window.location.origin,
-      "X-Title": "Yesletter",
+      "X-Title": "YesLetter",
     }),
     models: [
       { id: "google/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite" },
@@ -124,7 +124,7 @@ export const PROVIDERS: Record<Provider, ProviderConfig> = {
 export const DEFAULT_PROVIDER: Provider = "google";
 export const DEFAULT_MODEL = PROVIDERS.google.defaultModel;
 
-const SYSTEM_PROMPT = `你是 Yesletter 的信息抽取引擎。用户会给你一份学校录取通知（offer）的原文或图片。
+const SYSTEM_PROMPT = `你是 YesLetter 的信息抽取引擎。用户会给你一份学校录取通知（offer）的原文或图片。
 请**仅**输出一个 JSON 对象，遵循下方 schema，不要输出任何其它文字、注释或 markdown 包裹。
 
 ⛔ 全文（包括 conditions[].item / conditions[].details / must_do[].action / must_do[].details / notes[] / info_gaps[]）**严禁**任何 markdown 标记：
@@ -849,7 +849,7 @@ async function extractOnce(
   const json = await res.json();
   const content: string | undefined = json?.choices?.[0]?.message?.content;
   if (!content) {
-    console.error("[Yesletter] LLM returned empty content", {
+    console.error("[YesLetter] LLM returned empty content", {
       provider,
       model,
       response: json,
@@ -884,7 +884,7 @@ async function extractOnce(
 
   if (!looksOk) {
     console.warn(
-      "[Yesletter] Extraction returned without a school name. Raw response below — paste this if reporting a bug.",
+      "[YesLetter] Extraction returned without a school name. Raw response below — paste this if reporting a bug.",
     );
     console.warn("provider/model:", provider, model);
     console.warn("raw content:", content);

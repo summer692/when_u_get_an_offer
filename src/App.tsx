@@ -101,12 +101,12 @@ export default function App() {
   );
 
   /** Cache-hit fast path: run a 1.5s timer so the user perceives
-   * "Yesletter 正在为你快速调取..." instead of an instantaneous flash,
+   * "YesLetter 正在为你快速调取..." instead of an instantaneous flash,
    * then commit the cached extraction as a fresh Offer. */
   const runFromCache = useCallback(
     async (extracted: ExtractedOffer, input: ParsedInput) => {
       setQuickMode(true);
-      setStage("Yesletter 正在为你快速调取……");
+      setStage("YesLetter 正在为你快速调取……");
       await new Promise((r) => setTimeout(r, FAST_PATH_DELAY_MS));
       await persistAndOpen(extracted, input);
     },
@@ -127,7 +127,7 @@ export default function App() {
       turnstileToken: string | undefined,
     ) => {
       setQuickMode(false);
-      setStage("Yesletter 阅读中，请站在此地不要动......");
+      setStage("YesLetter 阅读中，请站在此地不要动......");
       let extracted: ExtractedOffer = await extractOffer(input, {
         apiKey,
         provider,
@@ -163,7 +163,7 @@ export default function App() {
           // L3 hit — apply silently, no separate stage label needed.
           extracted = applyResearch(extracted, cachedResearch);
         } else {
-          setStage("Yesletter 正在查询官网补全信息......");
+          setStage("YesLetter 正在查询官网补全信息......");
           try {
             const research = await researchOffer(extracted, { apiKey });
             if (research) {
@@ -194,7 +194,7 @@ export default function App() {
       try {
         setError(null);
         setQuickMode(false);
-        setStage("Yesletter 阅读中，请站在此地不要动......");
+        setStage("YesLetter 阅读中，请站在此地不要动......");
 
         // Resolve provider+model first so we can include them in the
         // cache key. Different (provider, model) trios produce different
@@ -255,7 +255,7 @@ export default function App() {
       try {
         setError(null);
         setQuickMode(false);
-        setStage("Yesletter 阅读中,请站在此地不要动......");
+        setStage("YesLetter 阅读中,请站在此地不要动......");
 
         const { apiKey, provider, model, turnstileToken: tt } =
           await ensureKey();

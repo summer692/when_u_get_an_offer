@@ -219,12 +219,12 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         {agencyLogo ? (
           <img
             src={agencyLogo}
-            alt={agencyName || "Yesletter"}
+            alt={agencyName || "YesLetter"}
             style={{ height: 26, width: "auto", objectFit: "contain" }}
             crossOrigin="anonymous"
           />
         ) : (
-          // Always render the brand text — falls back to "Yesletter" when
+          // Always render the brand text — falls back to "YesLetter" when
           // the user hasn't customized, so the header right-side never
           // looks empty.
           <div
@@ -236,7 +236,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
               textTransform: "uppercase",
             }}
           >
-            {agencyName || "Yesletter"}
+            {agencyName || "YesLetter"}
           </div>
         )}
       </div>
@@ -506,7 +506,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         }}
       >
         <span>
-          {agencyName ? `Curated by ${agencyName}` : "Curated by Yesletter"}
+          {agencyName ? `Curated by ${agencyName}` : "Curated by YesLetter"}
         </span>
         <span style={{ fontVariantNumeric: "tabular-nums" }}>
           {dateStamp}

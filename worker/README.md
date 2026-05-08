@@ -1,8 +1,12 @@
-# Yesletter proxy Worker
+# YesLetter proxy Worker
 
-Cloudflare Worker that holds the Gemini API key server-side, validates
+Cloudflare Worker that holds the upstream LLM API key server-side, validates
 Cloudflare Turnstile, rate-limits per IP, and proxies extraction requests
-from the Yesletter frontend.
+from the YesLetter frontend.
+
+Default upstream is **gptsapi.net** (Hong Kong reseller, accepts CNY,
+OpenAI-compatible). Switch to Google's official Gemini endpoint by
+changing `LLM_BASE_URL` in `wrangler.toml`.
 
 ## One-time setup
 
@@ -10,8 +14,9 @@ from the Yesletter frontend.
 2. **Install Wrangler** locally — `npm i -g wrangler` and `wrangler login`.
 3. **Create a Turnstile site** at https://dash.cloudflare.com/?to=/:account/turnstile.
    Copy the **Site Key** (used by the frontend) and **Secret Key** (used here).
-4. **Upgrade Gemini to paid tier** at https://aistudio.google.com/api-keys.
-   Set a monthly budget cap in Google Cloud Console to avoid runaway costs.
+4. **Get an LLM API key** from your chosen upstream:
+   - gptsapi.net (default): https://gptsapi.net → 充值 → API Keys
+   - Google AI Studio: https://aistudio.google.com/api-keys (set monthly budget cap in Google Cloud Console)
 5. **Create the KV namespace** for rate limiting:
 
    ```bash
@@ -24,12 +29,14 @@ from the Yesletter frontend.
 6. **Set secrets**:
 
    ```bash
-   wrangler secret put GEMINI_API_KEY
+   wrangler secret put LLM_API_KEY
    wrangler secret put TURNSTILE_SECRET_KEY
    ```
 
-7. **Update `wrangler.toml`** `ALLOWED_ORIGINS` to include your frontend
-   domain (e.g. `https://summer692.github.io`). Replace `*` once production.
+7. **Update `wrangler.toml`** if you want to switch upstream:
+   - Default `LLM_BASE_URL = "https://api.gptsapi.net"` (gptsapi.net)
+   - For official Gemini: `LLM_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai"`
+   - Update `ALLOWED_ORIGINS` to your frontend domain (e.g. `https://yesletter.org`).
 
 8. **Deploy**:
 
@@ -67,4 +74,4 @@ Request body:
 }
 ```
 
-Returns the raw Gemini response (OpenAI-compatible chat completion shape).
+Returns the upstream's chat completion response (OpenAI-compatible shape).
