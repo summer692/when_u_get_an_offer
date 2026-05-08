@@ -19,6 +19,7 @@ import {
   researchOffer,
 } from "./lib/llm";
 import { TurnstileWidget } from "./components/TurnstileWidget";
+import { InstallPrompt } from "./components/InstallPrompt";
 import {
   getCachedExtraction,
   getCachedOcr,
@@ -331,8 +332,8 @@ export default function App() {
       />
 
       {/* Turnstile widget. In embedded mode, this prepares a token before
-          the user uploads. interaction-only appearance keeps the widget
-          tucked away unless Cloudflare decides a challenge is needed. */}
+          the user uploads. Always-visible appearance so users see the
+          anti-abuse gate (more trust). */}
       {isEmbeddedMode() && (
         <div className="fixed bottom-4 right-4 z-30 pointer-events-auto">
           <TurnstileWidget
@@ -341,6 +342,8 @@ export default function App() {
           />
         </div>
       )}
+
+      <InstallPrompt />
     </div>
   );
 }
