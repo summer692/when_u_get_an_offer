@@ -22,6 +22,14 @@ export interface ChatMessage {
 
 interface ChatResponse {
   choices?: Array<{ message?: { content?: string } }>;
+  /** Token usage as reported by the upstream. Logged for cost diagnosis
+   * — particularly to verify whether base64 image dataURLs are being
+   * tokenized as image media (low) vs text (catastrophically high). */
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+  };
   error?: unknown;
 }
 
@@ -46,6 +54,11 @@ export async function callLLM(
 ): Promise<ChatResponse> {
   const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
   const payload = JSON.stringify({ model, messages });
+  // Diagnostic stats. Logged on success or failure so we can answer
+  // "where did the tokens go" by inspecting wrangler tail.
+  const payloadBytes = payload.length;
+  const imageCount = countImageParts(messages);
+  const textChars = countTextChars(messages);
 
   let lastError: Error | null = null;
 
@@ -70,7 +83,17 @@ export async function callLLM(
       const cfErr = res.headers.get("cf-error-type") ?? "-";
 
       if (res.ok) {
-        return (await res.json()) as ChatResponse;
+        const json = (await res.json()) as ChatResponse;
+        const inTok = json.usage?.prompt_tokens;
+        const outTok = json.usage?.completion_tokens;
+        // Single line so each call shows up as one tail entry. Format
+        // chosen so it's grep-able: "[yesletter] usage tokens=…"
+        console.log(
+          `[yesletter] usage attempt=${attempt + 1} tokens=${inTok ?? "?"}/${outTok ?? "?"} ` +
+            `payload=${payloadBytes}b images=${imageCount} textChars=${textChars} ` +
+            `cf-ray=${cfRay}`,
+        );
+        return json;
       }
 
       const body = (await res.text()).slice(0, 500);
@@ -107,4 +130,38 @@ export async function callLLM(
   }
 
   throw lastError ?? new Error("LLM call failed after retries");
+}
+
+/** Count how many image_url parts are in the user/assistant content
+ * arrays. OpenAI-compatible content can be either a plain string or
+ * an array of {type, ...} parts. */
+function countImageParts(messages: ChatMessage[]): number {
+  let n = 0;
+  for (const m of messages) {
+    if (Array.isArray(m.content)) {
+      for (const part of m.content as Array<{ type?: string }>) {
+        if (part?.type === "image_url") n++;
+      }
+    }
+  }
+  return n;
+}
+
+/** Total length of plain-text content across all messages, including
+ * each text-typed array part. Useful for confirming whether the
+ * system prompt + extracted offer text are the size we expect. */
+function countTextChars(messages: ChatMessage[]): number {
+  let n = 0;
+  for (const m of messages) {
+    if (typeof m.content === "string") {
+      n += m.content.length;
+    } else if (Array.isArray(m.content)) {
+      for (const part of m.content as Array<{ type?: string; text?: string }>) {
+        if (part?.type === "text" && typeof part.text === "string") {
+          n += part.text.length;
+        }
+      }
+    }
+  }
+  return n;
 }
