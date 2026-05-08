@@ -23,6 +23,6 @@ ALLOWED_ORIGINS = "*"
 # KV binding for rate-limit counters.
 # Create with: wrangler kv:namespace create RATE_LIMIT
 # then paste the id below.
-# [[kv_namespaces]]
-# binding = "RATE_LIMIT"
-# id = "REPLACE_WITH_KV_ID"
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "40febdf34eb045259c357852d07512ee"
