@@ -82,7 +82,11 @@ export function TurnstileWidget({ resetCounter, onToken }: Props) {
         }
         widgetIdRef.current = window.turnstile.render(hostRef.current, {
           sitekey: SITE_KEY,
-          appearance: "interaction-only",
+          // "always" makes the widget visible to every user — small
+          // checkbox that says "Verify you are human". Builds trust
+          // (users SEE that there's anti-abuse) at the cost of one
+          // extra click vs invisible mode. Worth it for a public app.
+          appearance: "always",
           theme: "auto",
           callback: (token) => onToken(token),
           "error-callback": () => setError("人机验证失败，请刷新页面重试"),
