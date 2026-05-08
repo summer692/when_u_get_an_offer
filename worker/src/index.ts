@@ -54,6 +54,24 @@ export default {
     }
 
     const url = new URL(req.url);
+
+    // Tiny diagnostic endpoint. GET /api/version → returns the model
+    // and a build timestamp so we can confirm which Worker version is
+    // serving traffic when frontend / cache issues are suspected.
+    if (url.pathname === "/api/version" && req.method === "GET") {
+      return new Response(
+        JSON.stringify({
+          worker: "yesletter-api",
+          model: env.LLM_MODEL,
+          ok: true,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     if (url.pathname !== "/api/extract" || req.method !== "POST") {
       return jsonError(404, "not found", corsHeaders);
     }
@@ -107,8 +125,17 @@ export default {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } catch (err) {
+      // Log the full upstream error so wrangler tail / Workers logs can
+      // see the cf-ray + body. Return a clean, generic message to the
+      // user — they shouldn't see raw '520', 'cf-ray=…', etc.
       const message = err instanceof Error ? err.message : String(err);
-      return jsonError(502, `LLM upstream failed: ${message}`, corsHeaders);
+      console.error("[yesletter-api] upstream call failed:", message);
+      const status = /timeout/i.test(message) ? 504 : 502;
+      return jsonError(
+        status,
+        "AI 服务暂时不可用，请稍后重试。如果一直出现，请反馈给我们。",
+        corsHeaders,
+      );
     }
   },
 };
