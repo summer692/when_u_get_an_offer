@@ -66,6 +66,15 @@ export function parseEditableDate(
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+/** Keep free-form timing notes while canonicalizing complete dates. */
+export function normalizeDeadlineInput(
+  input: string | null | undefined,
+): string | null {
+  const raw = input?.trim();
+  if (!raw) return null;
+  return parseEditableDate(raw) ?? raw;
+}
+
 /** Strip the markdown formatting tokens we sometimes see leaked into
  * user-visible text fields (action / item / note / details). Models
  * occasionally wrap an emphasized phrase in **bold** even when the

@@ -1,6 +1,6 @@
 import { forwardRef, useLayoutEffect, useRef, useState } from "react";
 import type { Money, Offer } from "../lib/schema";
-import { formatDate, formatMoney } from "../lib/format";
+import { formatDate, formatMoney, parseEditableDate } from "../lib/format";
 import { isVisibleInShare } from "../lib/shareVisibility";
 import { sortTodosForDisplay } from "../lib/todoOrder";
 
@@ -712,6 +712,7 @@ function ListItem({
   deadline?: string;
   isLast?: boolean;
 }) {
+  const exactDeadline = parseEditableDate(deadline);
   return (
     <li
       style={{
@@ -773,7 +774,9 @@ function ListItem({
               fontWeight: 600,
             }}
           >
-            截止 · {formatDate(deadline)}
+            {exactDeadline
+              ? `截止 · ${formatDate(exactDeadline)}`
+              : deadline}
           </div>
         )}
       </div>

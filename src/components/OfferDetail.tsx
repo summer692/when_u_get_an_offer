@@ -2,7 +2,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Condition, Money, MustDo, Offer, Settings } from "../lib/schema";
 import { daysUntil, formatDaysLeft } from "../lib/countdown";
-import { formatDate, formatMoney, parseEditableDate } from "../lib/format";
+import {
+  formatDate,
+  formatMoney,
+  normalizeDeadlineInput,
+  parseEditableDate,
+} from "../lib/format";
 import { getSettings } from "../lib/db";
 import { captureNodeAsDataUrl, downloadDataUrl, safeFilename } from "../lib/exportImage";
 import { ALL_SECTIONS, ShareCard, type SectionId } from "./ShareCard";
@@ -432,17 +437,6 @@ export function OfferDetail({
 
   function requestSave() {
     if (!editing) return;
-    if (editing === "conditions" || editing === "must_do") {
-      const items = draft[editing] ?? [];
-      const hasInvalidDate = items.some(
-        (item) =>
-          !!item.deadline?.trim() && parseEditableDate(item.deadline) === null,
-      );
-      if (hasInvalidDate) {
-        flashToast("日期格式不正确，请使用 YYYY/MM/DD 或 YYYY-MM-DD", 3500);
-        return;
-      }
-    }
     setConfirming(editing);
   }
 
@@ -457,12 +451,12 @@ export function OfferDetail({
     if (key === "conditions") {
       value = (value as Condition[]).map((item) => ({
         ...item,
-        deadline: parseEditableDate(item.deadline),
+        deadline: normalizeDeadlineInput(item.deadline),
       }));
     } else if (key === "must_do") {
       value = (value as MustDo[]).map((item) => ({
         ...item,
-        deadline: parseEditableDate(item.deadline),
+        deadline: normalizeDeadlineInput(item.deadline),
       }));
     }
     const updated: Offer = { ...offer, [key]: value };
@@ -857,14 +851,7 @@ export function OfferDetail({
                         {c.details}
                       </div>
                     )}
-                    {c.deadline && (
-                      <div className="text-sm mt-1.5 flex items-baseline gap-2">
-                        <span className="text-red-600 dark:text-red-400 font-medium">
-                          截止 {formatDate(c.deadline)}
-                        </span>
-                        <CountdownPill date={c.deadline} />
-                      </div>
-                    )}
+                    {c.deadline && <DeadlineDisplay value={c.deadline} />}
                   </div>
                   <div className="shrink-0">
                     <ShareToggle
@@ -925,14 +912,7 @@ export function OfferDetail({
                           {m.details}
                         </div>
                       )}
-                      {m.deadline && (
-                        <div className="text-sm mt-1.5 flex items-baseline gap-2">
-                          <span className="text-red-600 dark:text-red-400 font-medium">
-                            截止 {formatDate(m.deadline)}
-                          </span>
-                          <CountdownPill date={m.deadline} />
-                        </div>
-                      )}
+                      {m.deadline && <DeadlineDisplay value={m.deadline} />}
                     </div>
                     {origIdx >= 0 && (
                       <div className="shrink-0">
@@ -1196,6 +1176,18 @@ function CountdownPill({ date }: { date: string }) {
       {d.value}
       {d.unit && ` ${d.unit}`}
     </span>
+  );
+}
+
+function DeadlineDisplay({ value }: { value: string }) {
+  const exactDate = parseEditableDate(value);
+  return (
+    <div className="text-sm mt-1.5 flex items-baseline gap-2">
+      <span className="text-red-600 dark:text-red-400 font-medium">
+        {exactDate ? `截止 ${formatDate(exactDate)}` : value}
+      </span>
+      {exactDate && <CountdownPill date={exactDate} />}
+    </div>
   );
 }
 
@@ -1539,8 +1531,6 @@ function OptionalDateEditor({
 }) {
   const pickerRef = useRef<HTMLInputElement>(null);
   const normalized = parseEditableDate(value);
-  const hasValue = !!value?.trim();
-  const invalid = hasValue && normalized === null;
 
   function openPicker() {
     const picker = pickerRef.current;
@@ -1554,19 +1544,12 @@ function OptionalDateEditor({
       <div className="relative flex-1 min-w-[170px]">
         <input
           type="text"
-          inputMode="numeric"
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value || null)}
-          onBlur={() => {
-            if (!hasValue) onChange(null);
-            else if (normalized) onChange(normalized);
-          }}
-          placeholder="YYYY/MM/DD（可手动输入）"
-          aria-label="截止日期（可手动输入，也可留空）"
-          aria-invalid={invalid}
-          className={`${EDITOR_INPUT} pr-11 ${
-            invalid ? "border-red-500 dark:border-red-400" : ""
-          }`}
+          onBlur={() => onChange(normalizeDeadlineInput(value))}
+          placeholder="可输入日期或文字，如：预计 2026 年 9 月"
+          aria-label="日期或时间说明（可输入文字，也可留空）"
+          className={`${EDITOR_INPUT} pr-11`}
         />
         <button
           type="button"
@@ -1594,11 +1577,6 @@ function OptionalDateEditor({
           aria-hidden="true"
           className="absolute w-px h-px opacity-0 pointer-events-none"
         />
-        {invalid && (
-          <div className="mt-1 text-xs text-red-500">
-            请输入有效日期，例如 2026/09/07
-          </div>
-        )}
       </div>
       {value ? (
         <button

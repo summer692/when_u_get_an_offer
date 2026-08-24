@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseEditableDate } from "./format";
+import { normalizeDeadlineInput, parseEditableDate } from "./format";
 
 describe("parseEditableDate", () => {
   it("accepts slash, dash, dot, and Chinese date formats", () => {
@@ -19,5 +19,17 @@ describe("parseEditableDate", () => {
     expect(parseEditableDate("2028/02/29")).toBe("2028-02-29");
     expect(parseEditableDate("  ")).toBeNull();
     expect(parseEditableDate(null)).toBeNull();
+  });
+});
+
+describe("normalizeDeadlineInput", () => {
+  it("canonicalizes complete dates but preserves timing notes", () => {
+    expect(normalizeDeadlineInput("2026/9/7")).toBe("2026-09-07");
+    expect(normalizeDeadlineInput(" 预计：2026 年 9 月 ")).toBe(
+      "预计：2026 年 9 月",
+    );
+    expect(normalizeDeadlineInput("收到正式录取信后 14 天内")).toBe(
+      "收到正式录取信后 14 天内",
+    );
   });
 });

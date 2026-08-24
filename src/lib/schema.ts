@@ -47,6 +47,7 @@ export interface Condition {
    * numbers, source institutions, etc.). Multi-line allowed. */
   details?: string;
   status: "required" | "optional" | "met";
+  /** Exact YYYY-MM-DD date or a free-form timing note when no date is known. */
   deadline?: string | null;
 }
 
@@ -55,6 +56,7 @@ export interface MustDo {
   /** Optional extended description (URL to use, what exactly to upload,
    * payment composition, contact email, etc.). Multi-line allowed. */
   details?: string;
+  /** Exact YYYY-MM-DD date or a free-form timing note when no date is known. */
   deadline?: string | null;
   /** Prevent deterministic extraction fixups from restoring a date the user
    * deliberately changed or cleared in the editor. */
