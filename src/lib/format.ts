@@ -33,6 +33,39 @@ export function formatDate(iso: string | null | undefined): string {
   });
 }
 
+/**
+ * Parse a user-entered calendar date and return the canonical YYYY-MM-DD
+ * value used by the offer schema. Separators may be typed as -, /, ., or
+ * Chinese year/month/day characters. Empty and invalid values return null.
+ */
+export function parseEditableDate(
+  input: string | null | undefined,
+): string | null {
+  const raw = input?.trim();
+  if (!raw) return null;
+
+  const match = raw.match(
+    /^(\d{4})(?:[-/.]|年)(\d{1,2})(?:[-/.]|月)(\d{1,2})(?:日)?$/,
+  );
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (year < 1990 || year > 2100) return null;
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 /** Strip the markdown formatting tokens we sometimes see leaked into
  * user-visible text fields (action / item / note / details). Models
  * occasionally wrap an emphasized phrase in **bold** even when the

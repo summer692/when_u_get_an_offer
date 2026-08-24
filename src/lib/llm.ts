@@ -1350,7 +1350,7 @@ export function inheritDepositDeadline(offer: ExtractedOffer): void {
     const text = `${m.action ?? ""} ${m.details ?? ""}`.toLowerCase();
     const isDepositTask =
       /留位|deposit|caution|押金|入学保证金|预交学费|确认费/i.test(text);
-    if (isDepositTask && !m.deadline) {
+    if (isDepositTask && !m.deadline && !m.deadline_manually_edited) {
       m.deadline = acceptDate;
     }
   }

@@ -56,6 +56,9 @@ export interface MustDo {
    * payment composition, contact email, etc.). Multi-line allowed. */
   details?: string;
   deadline?: string | null;
+  /** Prevent deterministic extraction fixups from restoring a date the user
+   * deliberately changed or cleared in the editor. */
+  deadline_manually_edited?: boolean;
   priority: "high" | "medium" | "low";
 }
 

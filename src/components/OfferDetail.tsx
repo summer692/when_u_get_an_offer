@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Condition, Money, MustDo, Offer, Settings } from "../lib/schema";
 import { daysUntil, formatDaysLeft } from "../lib/countdown";
-import { formatDate, formatMoney } from "../lib/format";
+import { formatDate, formatMoney, parseEditableDate } from "../lib/format";
 import { getSettings } from "../lib/db";
 import { captureNodeAsDataUrl, downloadDataUrl, safeFilename } from "../lib/exportImage";
 import { ALL_SECTIONS, ShareCard, type SectionId } from "./ShareCard";
@@ -431,16 +431,38 @@ export function OfferDetail({
 
   function requestSave() {
     if (!editing) return;
+    if (editing === "conditions" || editing === "must_do") {
+      const items = draft[editing] ?? [];
+      const hasInvalidDate = items.some(
+        (item) =>
+          !!item.deadline?.trim() && parseEditableDate(item.deadline) === null,
+      );
+      if (hasInvalidDate) {
+        flashToast("日期格式不正确，请使用 YYYY/MM/DD 或 YYYY-MM-DD", 3500);
+        return;
+      }
+    }
     setConfirming(editing);
   }
 
   async function commitSave() {
     if (!confirming) return;
     const key = confirming;
-    const value = draft[key];
+    let value = draft[key];
     if (value === undefined) {
       setConfirming(null);
       return;
+    }
+    if (key === "conditions") {
+      value = (value as Condition[]).map((item) => ({
+        ...item,
+        deadline: parseEditableDate(item.deadline),
+      }));
+    } else if (key === "must_do") {
+      value = (value as MustDo[]).map((item) => ({
+        ...item,
+        deadline: parseEditableDate(item.deadline),
+      }));
     }
     const updated: Offer = { ...offer, [key]: value };
     if (key === "conditions" || key === "must_do") {
@@ -1494,15 +1516,69 @@ function OptionalDateEditor({
   value?: string | null;
   onChange: (next: string | null) => void;
 }) {
+  const pickerRef = useRef<HTMLInputElement>(null);
+  const normalized = parseEditableDate(value);
+  const hasValue = !!value?.trim();
+  const invalid = hasValue && normalized === null;
+
+  function openPicker() {
+    const picker = pickerRef.current;
+    if (!picker) return;
+    if (typeof picker.showPicker === "function") picker.showPicker();
+    else picker.click();
+  }
+
   return (
-    <div className="flex flex-1 min-w-[180px] items-center gap-2">
-      <input
-        type="date"
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value || null)}
-        aria-label="截止日期（可留空）"
-        className={EDITOR_INPUT + " flex-1 min-w-[140px]"}
-      />
+    <div className="flex flex-1 min-w-[220px] items-start gap-2">
+      <div className="relative flex-1 min-w-[170px]">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value || null)}
+          onBlur={() => {
+            if (!hasValue) onChange(null);
+            else if (normalized) onChange(normalized);
+          }}
+          placeholder="YYYY/MM/DD（可手动输入）"
+          aria-label="截止日期（可手动输入，也可留空）"
+          aria-invalid={invalid}
+          className={`${EDITOR_INPUT} pr-11 ${
+            invalid ? "border-red-500 dark:border-red-400" : ""
+          }`}
+        />
+        <button
+          type="button"
+          onClick={openPicker}
+          aria-label="打开日历选择日期"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-ink-500 hover:text-ink-900 dark:hover:text-white transition-colors"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className="w-5 h-5"
+            aria-hidden="true"
+          >
+            <path d="M7 2v3M17 2v3M3 9h18M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Z" />
+          </svg>
+        </button>
+        <input
+          ref={pickerRef}
+          type="date"
+          value={normalized ?? ""}
+          onChange={(e) => onChange(e.target.value || null)}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="absolute w-px h-px opacity-0 pointer-events-none"
+        />
+        {invalid && (
+          <div className="mt-1 text-xs text-red-500">
+            请输入有效日期，例如 2026/09/07
+          </div>
+        )}
+      </div>
       {value ? (
         <button
           type="button"
@@ -1608,7 +1684,9 @@ function EditableTodoList({
           <div className="flex flex-wrap gap-2 items-center">
             <OptionalDateEditor
               value={m.deadline}
-              onChange={(deadline) => update(i, { deadline })}
+              onChange={(deadline) =>
+                update(i, { deadline, deadline_manually_edited: true })
+              }
             />
             <select
               value={m.priority}

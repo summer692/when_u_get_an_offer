@@ -243,6 +243,24 @@ describe("inheritDepositDeadline", () => {
     expect(offer.must_do![0].deadline).toBe("2024-03-15");
   });
 
+  it("does not restore a deposit deadline that the user manually cleared", () => {
+    const offer = makeOffer({
+      key_dates: [
+        { type: "accept_deadline", date: "2024-04-01", label: "" },
+      ],
+      must_do: [
+        {
+          action: "缴纳留位费",
+          deadline: null,
+          deadline_manually_edited: true,
+          priority: "high",
+        },
+      ],
+    });
+    inheritDepositDeadline(offer);
+    expect(offer.must_do![0].deadline).toBeNull();
+  });
+
   it("non-deposit task is left alone even if no deadline", () => {
     const offer: ExtractedOffer = {
       school: "Test",
