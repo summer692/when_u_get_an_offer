@@ -404,7 +404,14 @@ export function OfferDetail({
         ? offer.must_do ?? []
         : offer.notes ?? [];
     // structuredClone so list edits don't mutate the saved offer object.
-    setDraft((prev) => ({ ...prev, [key]: structuredClone(seed) }));
+    const cloned = structuredClone(seed);
+    // Keep the todo editor in the same order as the read-only list. The
+    // latter is sorted by deadline/priority, while offer.must_do preserves
+    // extraction order; showing those two orders made the row a user opened
+    // appear to turn into a different task in edit mode.
+    const editorSeed =
+      key === "must_do" ? sortedTodos(cloned as MustDo[]) : cloned;
+    setDraft((prev) => ({ ...prev, [key]: editorSeed }));
     setEditing(key);
   }
 
@@ -567,7 +574,7 @@ export function OfferDetail({
           />
           {facultyZh && (
             <Fact
-              label="学院"
+              label="院系"
               value={facultyZh}
               secondary={
                 facultyZh !== offer.faculty ? offer.faculty : undefined
@@ -1480,6 +1487,37 @@ function AddRowButton({
   );
 }
 
+function OptionalDateEditor({
+  value,
+  onChange,
+}: {
+  value?: string | null;
+  onChange: (next: string | null) => void;
+}) {
+  return (
+    <div className="flex flex-1 min-w-[180px] items-center gap-2">
+      <input
+        type="date"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        aria-label="截止日期（可留空）"
+        className={EDITOR_INPUT + " flex-1 min-w-[140px]"}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="shrink-0 text-xs text-ink-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+        >
+          清除日期
+        </button>
+      ) : (
+        <span className="shrink-0 text-xs text-ink-400">日期未确定</span>
+      )}
+    </div>
+  );
+}
+
 function EditableConditionList({
   items,
   onChange,
@@ -1514,13 +1552,9 @@ function EditableConditionList({
             placeholder="补充说明（可留空）"
             className={EDITOR_INPUT}
           />
-          <input
-            type="date"
-            value={c.deadline ?? ""}
-            onChange={(e) =>
-              update(i, { deadline: e.target.value || null })
-            }
-            className={EDITOR_INPUT}
+          <OptionalDateEditor
+            value={c.deadline}
+            onChange={(deadline) => update(i, { deadline })}
           />
         </EditRowShell>
       ))}
@@ -1572,13 +1606,9 @@ function EditableTodoList({
             className={EDITOR_INPUT}
           />
           <div className="flex flex-wrap gap-2 items-center">
-            <input
-              type="date"
-              value={m.deadline ?? ""}
-              onChange={(e) =>
-                update(i, { deadline: e.target.value || null })
-              }
-              className={EDITOR_INPUT + " flex-1 min-w-[140px]"}
+            <OptionalDateEditor
+              value={m.deadline}
+              onChange={(deadline) => update(i, { deadline })}
             />
             <select
               value={m.priority}
@@ -1640,4 +1670,3 @@ function EditableNoteList({
     </ol>
   );
 }
-

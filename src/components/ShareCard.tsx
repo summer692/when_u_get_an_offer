@@ -121,7 +121,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
     Number(showFee.deposit) +
     Number(showFee.scholarship);
   const facultySlot: { label: string; value: string } | null = facultyZh
-    ? { label: "学院", value: facultyZh }
+    ? { label: "院系", value: facultyZh }
     : offer.student_category
       ? { label: "类别", value: offer.student_category }
       : null;
