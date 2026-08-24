@@ -1,7 +1,8 @@
 import { forwardRef, useLayoutEffect, useRef, useState } from "react";
-import type { Money, MustDo, Offer } from "../lib/schema";
+import type { Money, Offer } from "../lib/schema";
 import { formatDate, formatMoney } from "../lib/format";
 import { isVisibleInShare } from "../lib/shareVisibility";
+import { sortTodosForDisplay } from "../lib/todoOrder";
 
 export type SectionId = "specs" | "fees" | "conditions" | "todos" | "notes";
 export const ALL_SECTIONS: readonly SectionId[] = [
@@ -107,7 +108,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   const termStartDate = offer.key_dates?.find((k) => k.type === "term_start")?.date;
   const termStartDisplay =
     termStartDate ? formatDate(termStartDate) : offer.term_start_text || null;
-  const todos = sortedTodos(offer.must_do ?? []);
+  const todos = sortTodosForDisplay(offer.must_do ?? []);
 
   // Per-field visibility for the share export. Empty fields default to
   // hidden so newcomers get a clean poster; explicit overrides win.
@@ -778,20 +779,6 @@ function ListItem({
       </div>
     </li>
   );
-}
-
-function sortedTodos(todos: MustDo[]): MustDo[] {
-  const PRIORITY = { high: 0, medium: 1, low: 2 } as const;
-  return [...todos].sort((a, b) => {
-    if (a.deadline && b.deadline) {
-      const da = new Date(a.deadline).getTime();
-      const db = new Date(b.deadline).getTime();
-      if (Number.isFinite(da) && Number.isFinite(db) && da !== db) return da - db;
-    }
-    if (a.deadline && !b.deadline) return -1;
-    if (!a.deadline && b.deadline) return 1;
-    return PRIORITY[a.priority] - PRIORITY[b.priority];
-  });
 }
 
 function pad(n: number) {

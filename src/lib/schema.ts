@@ -59,6 +59,9 @@ export interface MustDo {
   /** Prevent deterministic extraction fixups from restoring a date the user
    * deliberately changed or cleared in the editor. */
   deadline_manually_edited?: boolean;
+  /** User-defined display position. When present, it takes precedence over
+   * automatic deadline/priority sorting in both detail and share views. */
+  display_order?: number;
   priority: "high" | "medium" | "low";
 }
 

@@ -16,6 +16,7 @@ import {
   isVisibleInShare,
   setShareVisibility,
 } from "../lib/shareVisibility";
+import { sortTodosForDisplay } from "../lib/todoOrder";
 
 type FeeKey = "tuition" | "deposit" | "scholarship";
 type EditKey = "conditions" | "must_do" | "notes";
@@ -98,7 +99,7 @@ export function OfferDetail({
   const termStartDate = offer.key_dates?.find((k) => k.type === "term_start")?.date;
   const termStartDisplay =
     termStartDate ? formatDate(termStartDate) : offer.term_start_text || null;
-  const todos = sortedTodos(offer.must_do ?? []);
+  const todos = sortTodosForDisplay(offer.must_do ?? []);
 
   useEffect(() => {
     getSettings().then((s) =>
@@ -410,7 +411,7 @@ export function OfferDetail({
     // extraction order; showing those two orders made the row a user opened
     // appear to turn into a different task in edit mode.
     const editorSeed =
-      key === "must_do" ? sortedTodos(cloned as MustDo[]) : cloned;
+      key === "must_do" ? sortTodosForDisplay(cloned as MustDo[]) : cloned;
     setDraft((prev) => ({ ...prev, [key]: editorSeed }));
     setEditing(key);
   }
@@ -1395,20 +1396,6 @@ function hostOf(url: string): string {
 }
 
 
-function sortedTodos(todos: MustDo[]): MustDo[] {
-  const PRIORITY = { high: 0, medium: 1, low: 2 } as const;
-  return [...todos].sort((a, b) => {
-    if (a.deadline && b.deadline) {
-      const da = daysUntil(a.deadline);
-      const db = daysUntil(b.deadline);
-      if (Number.isFinite(da) && Number.isFinite(db) && da !== db) return da - db;
-    }
-    if (a.deadline && !b.deadline) return -1;
-    if (!a.deadline && b.deadline) return 1;
-    return PRIORITY[a.priority] - PRIORITY[b.priority];
-  });
-}
-
 function EditableSection({
   label,
   isEditing,
@@ -1460,10 +1447,14 @@ function EditableSection({
 function EditRowShell({
   index,
   onDelete,
+  onMoveUp,
+  onMoveDown,
   children,
 }: {
   index: number;
   onDelete: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -1473,14 +1464,36 @@ function EditRowShell({
           {index + 1}.
         </span>
         <div className="flex-1 min-w-0 space-y-2">{children}</div>
-        <button
-          type="button"
-          onClick={onDelete}
-          aria-label="删除这一项"
-          className="text-ink-400 hover:text-red-500 transition-colors text-2xl leading-none w-7 h-7 flex items-center justify-center shrink-0"
-        >
-          ×
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={onMoveUp}
+            disabled={!onMoveUp}
+            aria-label="上移这一项"
+            title="上移"
+            className="text-ink-500 hover:text-ink-900 dark:hover:text-white disabled:opacity-20 disabled:pointer-events-none transition-colors text-lg leading-none w-7 h-7 flex items-center justify-center"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            onClick={onMoveDown}
+            disabled={!onMoveDown}
+            aria-label="下移这一项"
+            title="下移"
+            className="text-ink-500 hover:text-ink-900 dark:hover:text-white disabled:opacity-20 disabled:pointer-events-none transition-colors text-lg leading-none w-7 h-7 flex items-center justify-center"
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label="删除这一项"
+            className="text-ink-400 hover:text-red-500 transition-colors text-2xl leading-none w-7 h-7 flex items-center justify-center"
+          >
+            ×
+          </button>
+        </div>
       </div>
     </li>
   );
@@ -1488,6 +1501,14 @@ function EditRowShell({
 
 const EDITOR_INPUT =
   "w-full px-3 py-2 bg-ink-100 dark:bg-ink-900 border border-transparent focus:border-ink-900 dark:focus:border-white focus:outline-none transition-colors rounded text-sm";
+
+function moveArrayItem<T>(items: T[], from: number, to: number): T[] {
+  if (to < 0 || to >= items.length || from === to) return items;
+  const next = [...items];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
+}
 
 function AddRowButton({
   label,
@@ -1611,6 +1632,12 @@ function EditableConditionList({
           key={i}
           index={i}
           onDelete={() => onChange(items.filter((_, j) => j !== i))}
+          onMoveUp={i > 0 ? () => onChange(moveArrayItem(items, i, i - 1)) : undefined}
+          onMoveDown={
+            i < items.length - 1
+              ? () => onChange(moveArrayItem(items, i, i + 1))
+              : undefined
+          }
         >
           <textarea
             value={c.item}
@@ -1657,6 +1684,13 @@ function EditableTodoList({
   function update(idx: number, patch: Partial<MustDo>) {
     onChange(items.map((m, i) => (i === idx ? { ...m, ...patch } : m)));
   }
+  function move(idx: number, nextIdx: number) {
+    const reordered = moveArrayItem(items, idx, nextIdx).map((item, order) => ({
+      ...item,
+      display_order: order,
+    }));
+    onChange(reordered);
+  }
   return (
     <ol className="space-y-3">
       {items.map((m, i) => (
@@ -1664,6 +1698,8 @@ function EditableTodoList({
           key={i}
           index={i}
           onDelete={() => onChange(items.filter((_, j) => j !== i))}
+          onMoveUp={i > 0 ? () => move(i, i - 1) : undefined}
+          onMoveDown={i < items.length - 1 ? () => move(i, i + 1) : undefined}
         >
           <textarea
             value={m.action}
@@ -1729,6 +1765,12 @@ function EditableNoteList({
           key={i}
           index={i}
           onDelete={() => onChange(items.filter((_, j) => j !== i))}
+          onMoveUp={i > 0 ? () => onChange(moveArrayItem(items, i, i - 1)) : undefined}
+          onMoveDown={
+            i < items.length - 1
+              ? () => onChange(moveArrayItem(items, i, i + 1))
+              : undefined
+          }
         >
           <textarea
             value={n}
